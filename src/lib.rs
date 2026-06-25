@@ -84,6 +84,8 @@ pub enum PassKind {
     PreScanNfc,
     /// Variation selectors or Unicode tag-block characters stripped. Strong injection signal.
     InvisibleStrip,
+    /// High character-level entropy or low English bigram coverage — encoded/random payload signal.
+    EntropyBigram,
 }
 
 impl std::fmt::Display for PassKind {
@@ -100,6 +102,7 @@ impl std::fmt::Display for PassKind {
             PassKind::CjkSuperposition => "cjk-superposition",
             PassKind::PreScanNfc       => "pre-scan-nfc",
             PassKind::InvisibleStrip   => "invisible-strip",
+            PassKind::EntropyBigram    => "entropy-bigram",
         })
     }
 }
@@ -250,6 +253,8 @@ impl Normalizer {
             0.0
         };
 
+        if self.has(&PassKind::EntropyBigram) { pass_entropy_bigram(&mut text, &mut detections); }
+
         let obfuscation_score = compute_score(&detections, script_score, leet_score);
         NormalizationResult { normalized: text, detections, obfuscation_score }
     }
@@ -270,6 +275,7 @@ impl Default for Normalizer {
         n.enabled.insert(PassKind::Homoglyph);
         n.enabled.insert(PassKind::ScriptIntrusion);
         n.enabled.insert(PassKind::Leetspeak);
+        n.enabled.insert(PassKind::EntropyBigram);
         n
     }
 }
@@ -288,6 +294,19 @@ pub fn analyze(input: &str) -> NormalizationResult {
 const CJK_SUPER_WINDOW: usize = 6;
 const CJK_SUPER_THRESHOLD: f32 = 0.55;
 const CJK_SUPER_MIN_CJK_FRAC: f32 = 0.40;
+
+const ENTROPY_BIGRAM_HIGH: f32 = 5.2;
+const ENTROPY_BIGRAM_MIN_ENGLISH: f32 = 0.15;
+const ENTROPY_BIGRAM_TOKEN_LEN: usize = 8;
+const ENTROPY_BIGRAM_MIN_ALPHA: usize = 6;
+const ENTROPY_BIGRAM_CJK_GATE: f32 = 0.60;
+const ENTROPY_BIGRAM_INPUT_MIN: usize = 12;
+
+const ENGLISH_BIGRAMS: &[&str] = &[
+    "TH", "HE", "IN", "ER", "AN", "RE", "ON", "EN", "AT", "ES",
+    "ED", "IS", "IT", "AL", "AR", "ST", "TO", "NT", "NG", "SE",
+    "HA", "AS", "OU", "IO", "LE", "VE", "CO", "ME", "DE", "HI",
+];
 
 /// Variation Selectors block (VS1–VS16).
 const VS_RANGE_A: std::ops::RangeInclusive<u32> = 0xFE00..=0xFE0F;
@@ -2450,6 +2469,80 @@ fn pass_leet(text: &mut String, detections: &mut Vec<Detection>) -> f32 {
     if total_chars == 0 { 0.0 } else { (total_leet as f32 / total_chars as f32).min(1.0) }
 }
 
+fn pass_entropy_bigram(text: &mut String, detections: &mut Vec<Detection>) {
+    if text.chars().count() < ENTROPY_BIGRAM_INPUT_MIN { return; }
+
+    let all_chars: Vec<char> = text.chars().collect();
+    let cjk_frac = all_chars.iter().filter(|&&c| cjk_script_zone(c) == 3).count() as f32
+        / all_chars.len() as f32;
+    if cjk_frac > ENTROPY_BIGRAM_CJK_GATE { return; }
+
+    let mut worst_token = String::new();
+    let mut worst_entropy: f32 = 0.0;
+    let mut worst_bigram: f32 = 1.0;
+    let mut fired = false;
+
+    for token in text.split_whitespace() {
+        let chars: Vec<char> = token.chars().collect();
+        let n = chars.len();
+        if n < ENTROPY_BIGRAM_TOKEN_LEN { continue; }
+
+        // Sub-check A: Shannon entropy
+        let mut freq: HashMap<char, u32> = HashMap::new();
+        for &c in &chars { *freq.entry(c).or_insert(0) += 1; }
+        let entropy: f32 = freq.values().map(|&f| {
+            let p = f as f32 / n as f32;
+            -p * p.log2()
+        }).sum();
+
+        // Sub-check B: English bigram coverage
+        let upper: Vec<char> = chars.iter()
+            .map(|c| c.to_uppercase().next().unwrap_or(*c))
+            .collect();
+        let alpha_count = chars.iter().filter(|c| c.is_alphabetic()).count();
+        let bigram_score = if alpha_count >= ENTROPY_BIGRAM_MIN_ALPHA {
+            let pairs = n - 1;
+            let hits = (0..pairs).filter(|&i| {
+                ENGLISH_BIGRAMS.iter().any(|&b| {
+                    let mut bc = b.chars();
+                    bc.next() == Some(upper[i]) && bc.next() == Some(upper[i + 1])
+                })
+            }).count();
+            hits as f32 / pairs as f32
+        } else {
+            1.0 // not enough alpha chars — assume clean
+        };
+
+        let high_entropy = entropy > ENTROPY_BIGRAM_HIGH;
+        let low_bigram = alpha_count >= ENTROPY_BIGRAM_MIN_ALPHA
+            && bigram_score < ENTROPY_BIGRAM_MIN_ENGLISH;
+
+        if high_entropy || low_bigram {
+            let is_worse = !fired
+                || entropy > worst_entropy
+                || bigram_score < worst_bigram;
+            if is_worse {
+                worst_token = token.to_string();
+                worst_entropy = entropy;
+                worst_bigram = bigram_score;
+            }
+            fired = true;
+        }
+    }
+
+    if fired {
+        detections.push(Detection {
+            kind: PassKind::EntropyBigram,
+            original: text.clone(),
+            normalized: text.clone(),
+            detail: format!(
+                "token {:?} entropy={:.2} bigram_score={:.2}",
+                worst_token, worst_entropy, worst_bigram
+            ),
+        });
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Score computation
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2467,6 +2560,7 @@ fn compute_score(detections: &[Detection], script_score: f32, leet_score: f32) -
         PassKind::CjkSuperposition => 1.0,
         PassKind::PreScanNfc       => 0.35,
         PassKind::InvisibleStrip   => 0.75,
+        PassKind::EntropyBigram    => 0.50,
     }).sum();
     score += script_score * 0.60;
     score += leet_score   * 0.40;
@@ -2800,5 +2894,57 @@ mod tests {
             "expected FullwidthChars detection");
         assert!(!r.detections.iter().any(|d| d.kind == PassKind::Homoglyph),
             "Homoglyph must not double-count fullwidth chars");
+    }
+
+    // ── EntropyBigram pass ───────────────────────────────────────────────────
+
+    #[test]
+    fn entropy_high_base64_blob_flagged() {
+        // Bare base64 with no prefix — not caught by the explicit Base64 pass.
+        // Low bigram coverage (no English pairs) should trigger EntropyBigram.
+        let r = run("SGVsbG8gV29ybGQ=");
+        assert!(r.detections.iter().any(|d| d.kind == PassKind::EntropyBigram),
+            "expected EntropyBigram on base64 blob");
+    }
+
+    #[test]
+    fn entropy_normal_english_clean() {
+        let r = run("The quick brown fox jumps over the lazy dog");
+        assert!(!r.detections.iter().any(|d| d.kind == PassKind::EntropyBigram),
+            "EntropyBigram must not fire on normal English prose");
+    }
+
+    #[test]
+    fn entropy_injection_keyword_low_bigram() {
+        // Short tokens — all below ENTROPY_BIGRAM_TOKEN_LEN gate.
+        // Intentionally not flagged: pass targets encoded payloads, not plaintext commands.
+        let r = run("exec bash -c whoami");
+        assert!(!r.detections.iter().any(|d| d.kind == PassKind::EntropyBigram),
+            "EntropyBigram must not fire on short plaintext tokens");
+    }
+
+    #[test]
+    fn entropy_random_string_flagged() {
+        // 16-char random alphanumeric — zero English bigrams, fires via low-bigram sub-check.
+        let r = run("xK9mP2vQ7nR4wL1j");
+        assert!(r.detections.iter().any(|d| d.kind == PassKind::EntropyBigram),
+            "expected EntropyBigram on random alphanumeric token");
+    }
+
+    #[test]
+    fn entropy_cjk_gated_out() {
+        // Predominantly CJK (>60%) — CjkSuperposition handles these; EntropyBigram gates out.
+        let r = run("中文字句子词语意义文字语言文化文明");
+        assert!(!r.detections.iter().any(|d| d.kind == PassKind::EntropyBigram),
+            "EntropyBigram must not fire on predominantly CJK input");
+    }
+
+    #[test]
+    fn entropy_disabled_works() {
+        let r = Normalizer::default()
+            .disable(PassKind::EntropyBigram)
+            .analyze("xK9mP2vQ7nR4wL1j");
+        assert!(!r.detections.iter().any(|d| d.kind == PassKind::EntropyBigram),
+            "disabled EntropyBigram must not appear in detections");
     }
 }
