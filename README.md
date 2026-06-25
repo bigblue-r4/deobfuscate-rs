@@ -44,7 +44,7 @@ Seven sequential passes. Each fires independently; all detections are cumulative
 | `BackslashEscape` | `\X` prefix-escaping of runs of characters | `\i\g\n\o\r\e` → `ignore` |
 | `Base64` | Explicit `b64.decode(…)` calls and bare base64 blobs | `SSBp…cw==` → `I ignore all…` |
 | `MorseCode` | ITU Morse spans ≥ 10 chars (≥ 60% Morse chars) | `.... .- -.-. -.-` → `HACK` |
-| `Homoglyph` | Cyrillic/Greek look-alike → ASCII (60+ mappings, TR39) | `іgnοre` → `ignore` |
+| `Homoglyph` | Cyrillic/Greek/Armenian/Hebrew/Math look-alike → ASCII (1,631 mappings, TR39) | `іgnοre` → `ignore` |
 | `ScriptIntrusion` | Non-Latin char embedded mid-word (structural detection) | `sy​stem` (Meitei mid-word) |
 | `Leetspeak` | Digit/symbol substitution in dense-leet tokens | `1337h4x0r` → `ieetaxor` |
 
@@ -154,8 +154,6 @@ Planned additions — contributions welcome:
   (base64 and Morse both have distinctive entropy profiles)
 - **Bigram language model**: English character bigram log-probability score;
   obfuscated text scores abnormally low even after decoding
-- **Expanded homoglyph table**: Armenian, Hebrew, Arabic, Hangul confusables
-  from full Unicode TR39 `confusables.txt` (currently ~60 pairs, TR39 has ~8,000)
 - **Script mixing ratio**: fraction of non-dominant-script chars as a continuous
   feature rather than a binary intrusion flag
 - **Per-token confidence**: each detection gets a confidence score based on
