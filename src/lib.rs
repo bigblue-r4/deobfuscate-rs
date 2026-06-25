@@ -52,6 +52,7 @@
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use std::collections::HashMap;
+use unicode_normalization::UnicodeNormalization as _;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -79,6 +80,10 @@ pub enum PassKind {
     /// Forward-reverse script-zone entropy spike — injection seam detected.
     /// HALT: text cleared, never forwarded.
     CjkSuperposition,
+    /// Unicode NFC normalization collapsed composed sequences.
+    PreScanNfc,
+    /// Variation selectors or Unicode tag-block characters stripped. Strong injection signal.
+    InvisibleStrip,
 }
 
 impl std::fmt::Display for PassKind {
@@ -93,6 +98,8 @@ impl std::fmt::Display for PassKind {
             PassKind::ScriptIntrusion  => "script-intrusion",
             PassKind::Leetspeak        => "leetspeak",
             PassKind::CjkSuperposition => "cjk-superposition",
+            PassKind::PreScanNfc       => "pre-scan-nfc",
+            PassKind::InvisibleStrip   => "invisible-strip",
         })
     }
 }
@@ -216,6 +223,9 @@ impl Normalizer {
         let mut text = input.to_string();
         let mut detections: Vec<Detection> = Vec::new();
 
+        if self.has(&PassKind::PreScanNfc)     { pass_nfc(&mut text, &mut detections); }
+        if self.has(&PassKind::InvisibleStrip) { pass_invisible(&mut text, &mut detections); }
+
         if self.has(&PassKind::CjkSuperposition) {
             if pass_cjk_superposition(&mut text, &mut detections) {
                 return NormalizationResult { normalized: String::new(), detections, obfuscation_score: 1.0 };
@@ -249,6 +259,8 @@ impl Default for Normalizer {
     /// Creates a normalizer with all passes enabled.
     fn default() -> Self {
         let mut n = Self::new();
+        n.enabled.insert(PassKind::PreScanNfc);
+        n.enabled.insert(PassKind::InvisibleStrip);
         n.enabled.insert(PassKind::CjkSuperposition);
         n.enabled.insert(PassKind::BiDiControl);
         n.enabled.insert(PassKind::FullwidthChars);
@@ -276,6 +288,13 @@ pub fn analyze(input: &str) -> NormalizationResult {
 const CJK_SUPER_WINDOW: usize = 6;
 const CJK_SUPER_THRESHOLD: f32 = 0.55;
 const CJK_SUPER_MIN_CJK_FRAC: f32 = 0.40;
+
+/// Variation Selectors block (VS1–VS16).
+const VS_RANGE_A: std::ops::RangeInclusive<u32> = 0xFE00..=0xFE0F;
+/// Variation Selectors Supplement (VS17–VS256).
+const VS_RANGE_B: std::ops::RangeInclusive<u32> = 0xE0100..=0xE01EF;
+/// Unicode Tags block — language tag characters with no legitimate LLM use.
+const TAG_BLOCK: std::ops::RangeInclusive<u32> = 0xE0000..=0xE007F;
 
 const BIDI_CONTROLS: &[char] = &[
     '\u{202E}', // RIGHT-TO-LEFT OVERRIDE
@@ -431,6 +450,57 @@ fn pass_cjk_superposition(text: &mut String, detections: &mut Vec<Detection>) ->
     });
     *text = String::new();
     true
+}
+
+fn pass_nfc(text: &mut String, detections: &mut Vec<Detection>) {
+    let before_len = text.chars().count();
+    let normalized: String = text.nfc().collect();
+    if normalized != *text {
+        let after_len = normalized.chars().count();
+        let collapsed = before_len.saturating_sub(after_len);
+        detections.push(Detection {
+            kind: PassKind::PreScanNfc,
+            original: text.clone(),
+            normalized: normalized.clone(),
+            detail: format!("NFC collapsed {} composed sequence(s)", collapsed),
+        });
+        *text = normalized;
+    }
+}
+
+fn pass_invisible(text: &mut String, detections: &mut Vec<Detection>) {
+    let original = text.clone();
+    let mut stripped_cps: Vec<u32> = Vec::new();
+    let cleaned: String = text.chars()
+        .filter(|&c| {
+            let n = c as u32;
+            let invisible = VS_RANGE_A.contains(&n)
+                || VS_RANGE_B.contains(&n)
+                || TAG_BLOCK.contains(&n);
+            if invisible { stripped_cps.push(n); }
+            !invisible
+        })
+        .collect();
+
+    if !stripped_cps.is_empty() {
+        let count = stripped_cps.len();
+        let display: Vec<String> = stripped_cps.iter().take(12)
+            .map(|&n| format!("U+{:05X}", n))
+            .collect();
+        let suffix = if count > 12 { "..." } else { "" };
+        detections.push(Detection {
+            kind: PassKind::InvisibleStrip,
+            original,
+            normalized: cleaned.clone(),
+            detail: format!(
+                "stripped {} invisible codepoint(s): [{}{}]",
+                count,
+                display.join(", "),
+                suffix,
+            ),
+        });
+        *text = cleaned;
+    }
 }
 
 fn pass_bidi(text: &mut String, detections: &mut Vec<Detection>) {
@@ -769,6 +839,8 @@ fn compute_score(detections: &[Detection], script_score: f32, leet_score: f32) -
         PassKind::ScriptIntrusion  => 0.40,
         PassKind::Leetspeak        => 0.30,
         PassKind::CjkSuperposition => 1.0,
+        PassKind::PreScanNfc       => 0.35,
+        PassKind::InvisibleStrip   => 0.75,
     }).sum();
     score += script_score * 0.60;
     score += leet_score   * 0.40;
@@ -985,5 +1057,83 @@ mod tests {
         // String shorter than CJK_SUPER_WINDOW * 2 — gated by length
         let r = run("中文字句");
         assert!(!r.detections.iter().any(|d| d.kind == PassKind::CjkSuperposition));
+    }
+
+    // ── Layer 1 pre-scan: NFC ────────────────────────────────────────────────
+
+    #[test]
+    fn nfc_composed_sequence_normalized() {
+        // "e" + U+0301 (combining acute) is NFD; NFC should collapse to "é" (U+00E9)
+        let r = run("e\u{0301}xample");
+        assert!(r.detections.iter().any(|d| d.kind == PassKind::PreScanNfc));
+        let nfc_det = r.detections.iter().find(|d| d.kind == PassKind::PreScanNfc).unwrap();
+        assert_eq!(nfc_det.normalized, "\u{00E9}xample");
+        assert!(r.is_obfuscated());
+    }
+
+    #[test]
+    fn nfc_already_normalized_no_detection() {
+        let r = run("hello world 中文");
+        assert!(!r.detections.iter().any(|d| d.kind == PassKind::PreScanNfc));
+    }
+
+    #[test]
+    fn nfc_disabled_leaves_composed() {
+        let r = Normalizer::default()
+            .disable(PassKind::PreScanNfc)
+            .analyze("e\u{0301}xample");
+        assert!(!r.detections.iter().any(|d| d.kind == PassKind::PreScanNfc));
+    }
+
+    // ── Layer 1 pre-scan: InvisibleStrip ────────────────────────────────────
+
+    #[test]
+    fn invisible_variation_selector_stripped() {
+        // U+FE0F is Variation Selector 16, commonly appended to emoji bases
+        let r = run("ignore\u{FE0F}all");
+        assert!(r.detections.iter().any(|d| d.kind == PassKind::InvisibleStrip));
+        let det = r.detections.iter().find(|d| d.kind == PassKind::InvisibleStrip).unwrap();
+        assert!(!det.normalized.contains('\u{FE0F}'));
+        assert!(r.should_flag());
+    }
+
+    #[test]
+    fn invisible_tag_block_stripped() {
+        // U+E0069..U+E006E etc. spell "ignore" in the Tags block
+        let r = run("normal text\u{E0069}\u{E0067}\u{E006E}\u{E006F}\u{E0072}\u{E0065}");
+        assert!(r.detections.iter().any(|d| d.kind == PassKind::InvisibleStrip));
+        let det = r.detections.iter().find(|d| d.kind == PassKind::InvisibleStrip).unwrap();
+        assert_eq!(det.normalized, "normal text");
+        assert!(det.detail.contains("U+E0069"));
+    }
+
+    #[test]
+    fn invisible_high_score_triggers_block() {
+        // InvisibleStrip weight 0.75 alone exceeds the block threshold of 0.60
+        let r = run("hello\u{FE0F}\u{E0069}world");
+        assert!(r.should_block());
+    }
+
+    #[test]
+    fn invisible_strip_runs_before_cjk_superposition() {
+        // CJK text + embedded tag chars + Latin injection:
+        // InvisibleStrip must appear before CjkSuperposition in detections vec.
+        let input = "中文字句\u{E0069}ignore句子词";
+        let r = Normalizer::default().analyze(input);
+        let inv_pos = r.detections.iter().position(|d| d.kind == PassKind::InvisibleStrip);
+        let cjk_pos = r.detections.iter().position(|d| d.kind == PassKind::CjkSuperposition);
+        assert!(inv_pos.is_some(), "InvisibleStrip should fire");
+        // CjkSuperposition may or may not fire depending on cleaned string; if it does, invisible must come first
+        if let Some(cp) = cjk_pos {
+            assert!(inv_pos.unwrap() < cp, "InvisibleStrip must precede CjkSuperposition");
+        }
+    }
+
+    #[test]
+    fn invisible_disabled_passes_through() {
+        let r = Normalizer::default()
+            .disable(PassKind::InvisibleStrip)
+            .analyze("ignore\u{FE0F}all");
+        assert!(!r.detections.iter().any(|d| d.kind == PassKind::InvisibleStrip));
     }
 }
