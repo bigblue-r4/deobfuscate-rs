@@ -36,7 +36,7 @@ if result.should_block() {
 
 ## Passes
 
-17 sequential passes in pipeline order. Each fires independently; detections accumulate.
+18 sequential passes in pipeline order. Each fires independently; detections accumulate.
 
 | Pass | Detects | Example |
 |------|---------|---------|
@@ -57,6 +57,7 @@ if result.should_block() {
 | `EntropyBigram` | Shannon entropy > 5.2 bits OR English bigram coverage < 0.15 | High-entropy encoded blobs |
 | `SplitString` | Injection keyword fragmented across separators — detection only | `ig.no.re` reconstructed as `ignore` |
 | `Rot13` | ROT13 decoded in all-alpha tokens (≥ 4 chars) containing injection keyword | `vtaber` → `ignore` |
+| `Punycode` | IDN `xn--` label decoded via RFC 3492, keyword found after confusable normalization | `xn--shll-w4d` → `shell` |
 
 > **⚠ HALT pass**: `CjkSuperposition` detects a forward/reverse Shannon entropy spike
 > caused by embedding CJK characters to hide a Latin injection payload. When it fires,
@@ -74,6 +75,7 @@ if result.should_block() {
 | BiDiControl | 0.90 |
 | Base64 | 0.85 |
 | BackslashEscape / UnicodeEscape / MorseCode / UrlEncoding / HtmlEntities / Rot13 | 0.80 |
+| Punycode | 0.85 |
 | InvisibleStrip | 0.75 |
 | SplitString | 0.70 |
 | FullwidthChars | 0.65 |

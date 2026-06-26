@@ -101,6 +101,9 @@ pub enum PassKind {
     UnicodeEscape,
     /// ROT13 substitution cipher decoded in all-alpha tokens containing injection keywords.
     Rot13,
+    /// Internationalized domain name `xn--` label decoded via Punycode (RFC 3492),
+    /// containing injection keyword after Unicode confusable normalization.
+    Punycode,
 }
 
 impl std::fmt::Display for PassKind {
@@ -123,6 +126,7 @@ impl std::fmt::Display for PassKind {
             PassKind::SplitString      => "split-string",
             PassKind::UnicodeEscape    => "unicode-escape",
             PassKind::Rot13            => "rot13",
+            PassKind::Punycode         => "punycode",
         })
     }
 }
@@ -394,6 +398,7 @@ const DEFAULT_WEIGHT_LEET:            f32   = 0.30;
 const DEFAULT_WEIGHT_SPLIT_STRING:    f32   = 0.70;
 const DEFAULT_WEIGHT_UNICODE_ESCAPE:  f32   = 0.80;
 const DEFAULT_WEIGHT_ROT13:           f32   = 0.80;
+const DEFAULT_WEIGHT_PUNYCODE:        f32   = 0.85;
 
 // Serde per-field default functions — only compiled with the `serde` feature.
 #[cfg(feature = "serde")] fn serde_flag_threshold()         -> f32   { DEFAULT_FLAG_THRESHOLD }
@@ -426,6 +431,7 @@ const DEFAULT_WEIGHT_ROT13:           f32   = 0.80;
 #[cfg(feature = "serde")] fn serde_weight_split_string()    -> f32   { DEFAULT_WEIGHT_SPLIT_STRING }
 #[cfg(feature = "serde")] fn serde_weight_unicode_escape()  -> f32   { DEFAULT_WEIGHT_UNICODE_ESCAPE }
 #[cfg(feature = "serde")] fn serde_weight_rot13()           -> f32   { DEFAULT_WEIGHT_ROT13 }
+#[cfg(feature = "serde")] fn serde_weight_punycode()        -> f32   { DEFAULT_WEIGHT_PUNYCODE }
 
 /// Runtime configuration for all pass thresholds and weights.
 ///
@@ -542,6 +548,9 @@ pub struct Config {
     /// Weight for Rot13 detections. Default 0.80.
     #[cfg_attr(feature = "serde", serde(default = "serde_weight_rot13"))]
     pub weight_rot13: f32,
+    /// Weight for Punycode detections. Default 0.85.
+    #[cfg_attr(feature = "serde", serde(default = "serde_weight_punycode"))]
+    pub weight_punycode: f32,
 }
 
 impl Default for Config {
@@ -577,6 +586,7 @@ impl Default for Config {
             weight_split_string:    DEFAULT_WEIGHT_SPLIT_STRING,
             weight_unicode_escape:  DEFAULT_WEIGHT_UNICODE_ESCAPE,
             weight_rot13:           DEFAULT_WEIGHT_ROT13,
+            weight_punycode:        DEFAULT_WEIGHT_PUNYCODE,
         }
     }
 }
@@ -696,6 +706,7 @@ impl Normalizer {
         if self.has(&PassKind::FullwidthChars)   { pass_fullwidth(&mut text, &mut detections); }
         if self.has(&PassKind::BackslashEscape)  { pass_backslash_unescape(&mut text, &mut detections); }
         if self.has(&PassKind::UnicodeEscape)    { pass_unicode_escape(&mut text, &mut detections); }
+        if self.has(&PassKind::Punycode)         { pass_punycode(&mut text, &mut detections); }
         if self.has(&PassKind::Rot13)            { pass_rot13(&mut text, &mut detections); }
         if self.has(&PassKind::UrlEncoding)      { pass_url_decode(&mut text, &mut detections, cfg); }
         if self.has(&PassKind::HtmlEntities)     { pass_html_entities(&mut text, &mut detections, cfg); }
@@ -755,6 +766,7 @@ impl Default for Normalizer {
         n.enabled.insert(PassKind::SplitString);
         n.enabled.insert(PassKind::UnicodeEscape);
         n.enabled.insert(PassKind::Rot13);
+        n.enabled.insert(PassKind::Punycode);
         n
     }
 }
@@ -3264,11 +3276,146 @@ fn compute_score(detections: &[Detection], script_score: f32, leet_score: f32, c
         PassKind::SplitString      => config.weight_split_string,
         PassKind::UnicodeEscape    => config.weight_unicode_escape,
         PassKind::Rot13            => config.weight_rot13,
+        PassKind::Punycode         => config.weight_punycode,
         PassKind::CjkSuperposition => 1.0,
     }).sum();
     score += script_score * 0.60;
     score += leet_score   * 0.40;
     score.min(1.0)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Punycode pass (RFC 3492)
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn punycode_digit(c: char) -> Option<u32> {
+    match c {
+        'a'..='z' => Some(c as u32 - b'a' as u32),
+        'A'..='Z' => Some(c as u32 - b'A' as u32),
+        '0'..='9' => Some(c as u32 - b'0' as u32 + 26),
+        _ => None,
+    }
+}
+
+fn punycode_adapt(mut delta: u32, numpoints: u32, firsttime: bool) -> u32 {
+    const BASE: u32 = 36;
+    const TMIN: u32 = 1;
+    const TMAX: u32 = 26;
+    const SKEW: u32 = 38;
+    const DAMP: u32 = 700;
+    delta = if firsttime { delta / DAMP } else { delta / 2 };
+    delta += delta / numpoints;
+    let mut k: u32 = 0;
+    while delta > (BASE - TMIN) * TMAX / 2 {
+        delta /= BASE - TMIN;
+        k += BASE;
+    }
+    k + (BASE - TMIN + 1) * delta / (delta + SKEW)
+}
+
+/// Decode a bare punycode label (the part after the `xn--` ACE prefix).
+fn punycode_decode(encoded: &str) -> Option<String> {
+    const BASE: u32 = 36;
+    const TMIN: u32 = 1;
+    const TMAX: u32 = 26;
+    const INITIAL_N: u32 = 128;
+    const INITIAL_BIAS: u32 = 72;
+
+    let (basic, ext) = match encoded.rfind('-') {
+        Some(p) => (&encoded[..p], &encoded[p + 1..]),
+        None    => ("", encoded),
+    };
+    if !basic.chars().all(|c| c.is_ascii_graphic()) { return None; }
+
+    let mut output: Vec<char> = basic.chars().collect();
+    let mut n: u32 = INITIAL_N;
+    let mut bias: u32 = INITIAL_BIAS;
+    let mut i: u32 = 0;
+    let mut iter = ext.chars().peekable();
+
+    while iter.peek().is_some() {
+        let oldi = i;
+        let mut w: u32 = 1;
+        let mut k = BASE;
+        loop {
+            let digit = punycode_digit(iter.next()?)?;
+            i = i.checked_add(digit.checked_mul(w)?)?;
+            let t = if k <= bias { TMIN } else if k >= bias + TMAX { TMAX } else { k - bias };
+            if digit < t { break; }
+            w = w.checked_mul(BASE - t)?;
+            k += BASE;
+        }
+        let numpoints = (output.len() as u32).checked_add(1)?;
+        bias = punycode_adapt(i - oldi, numpoints, oldi == 0);
+        n = n.checked_add(i / numpoints)?;
+        i %= numpoints;
+        output.insert(i as usize, char::from_u32(n)?);
+        i += 1;
+    }
+    Some(output.iter().collect())
+}
+
+fn pass_punycode(text: &mut String, detections: &mut Vec<Detection>) {
+    let original = text.clone();
+    let mut parts: Vec<String> = Vec::new();
+    let mut changed = 0usize;
+    let mut rest = original.as_str();
+
+    while !rest.is_empty() {
+        let gap = rest.find(|c: char| !c.is_ascii_whitespace()).unwrap_or(rest.len());
+        if gap > 0 {
+            parts.push(rest[..gap].to_string());
+            rest = &rest[gap..];
+            continue;
+        }
+        let end = rest.find(|c: char| c.is_ascii_whitespace()).unwrap_or(rest.len());
+        let token = &rest[..end];
+
+        let decoded_and_normalized = if token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            let lower = token.to_ascii_lowercase();
+            if let Some(label) = lower.strip_prefix("xn--") {
+                punycode_decode(label).and_then(|decoded| {
+                    if decoded.is_empty() { return None; }
+                    // Apply homoglyph normalization to expose confusable-char keywords
+                    let normalized: String = decoded.chars().map(|c| {
+                        HOMOGLYPHS.iter()
+                            .find(|(src, _)| *src == c)
+                            .map(|(_, dst)| *dst)
+                            .unwrap_or(c)
+                    }).collect();
+                    let norm_lower = normalized.to_lowercase();
+                    if INJECTION_KEYWORDS.iter().any(|kw| norm_lower.contains(kw)) {
+                        Some(normalized)
+                    } else {
+                        None
+                    }
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(norm) = decoded_and_normalized {
+            parts.push(norm);
+            changed += 1;
+        } else {
+            parts.push(token.to_string());
+        }
+        rest = &rest[end..];
+    }
+
+    if changed == 0 { return; }
+
+    let result: String = parts.join("");
+    detections.push(Detection {
+        kind: PassKind::Punycode,
+        original,
+        normalized: result.clone(),
+        detail: format!("xn-- punycode label(s) decoded ({} token(s)), result contains injection keyword", changed),
+    });
+    *text = result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4291,6 +4438,63 @@ mod tests {
         assert_eq!(&ts[7..8], "-");
         assert_eq!(&ts[10..11], "T");
         assert_eq!(&ts[19..20], "Z");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Punycode tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn punycode_keyword_via_confusable_detected() {
+        // "xn--shll-w4d" decodes to "sh\u{0435}ll" (Cyrillic е at position 2).
+        // HOMOGLYPHS: U+0435 → 'e', so normalized = "shell" → keyword hit.
+        let r = run("xn--shll-w4d");
+        assert!(r.detections.iter().any(|d| d.kind == PassKind::Punycode),
+            "Punycode pass must fire on xn--shll-w4d");
+        let det = r.detections.iter().find(|d| d.kind == PassKind::Punycode).unwrap();
+        assert_eq!(det.normalized.to_lowercase(), "shell",
+            "normalized must be 'shell', got {:?}", det.normalized);
+        assert!(r.should_flag());
+    }
+
+    #[test]
+    fn punycode_ignore_confusable_detected() {
+        // "xn--gnore-m2e" decodes to "\u{0456}gnore" (Cyrillic і at position 0).
+        // HOMOGLYPHS: U+0456 → 'i', so normalized = "ignore" → keyword hit.
+        let r = run("xn--gnore-m2e");
+        assert!(r.detections.iter().any(|d| d.kind == PassKind::Punycode),
+            "Punycode pass must fire on xn--gnore-m2e");
+    }
+
+    #[test]
+    fn punycode_no_keyword_no_fire() {
+        // "xn--bcher-kva" decodes to "bücher" (German "books") — not an injection keyword.
+        let r = run("xn--bcher-kva");
+        assert!(!r.detections.iter().any(|d| d.kind == PassKind::Punycode),
+            "innocent punycode must not fire");
+    }
+
+    #[test]
+    fn punycode_non_xn_token_ignored() {
+        let r = run("hello world goodbye");
+        assert!(!r.detections.iter().any(|d| d.kind == PassKind::Punycode));
+    }
+
+    #[test]
+    fn punycode_disabled() {
+        let r = Normalizer::default()
+            .disable(PassKind::Punycode)
+            .analyze("xn--shll-w4d");
+        assert!(!r.detections.iter().any(|d| d.kind == PassKind::Punycode),
+            "disabled Punycode pass must not fire");
+    }
+
+    #[test]
+    fn punycode_should_block() {
+        // weight 0.85 → should_block() (threshold 0.60)
+        let r = run("xn--shll-w4d");
+        assert!(r.should_block(),
+            "punycode keyword must trigger block, score={}", r.obfuscation_score);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
