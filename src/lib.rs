@@ -54,6 +54,9 @@ use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use std::collections::HashMap;
 use unicode_normalization::UnicodeNormalization as _;
 
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -403,7 +406,8 @@ impl Config {
     }
 
     /// Load from a file path. Returns [`Config::default`] if the file is missing or unparseable.
-    #[cfg(feature = "serde")]
+    /// Not available on wasm32 targets (no filesystem).
+    #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
     pub fn from_file(path: &std::path::Path) -> Self {
         match std::fs::read_to_string(path) {
             Ok(s) => toml::from_str(&s).unwrap_or_default(),
@@ -3662,7 +3666,7 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "serde")]
+    #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
     #[test]
     fn config_from_file_missing_returns_default() {
         let c = Config::from_file(std::path::Path::new("/nonexistent/path/deobfuscate.toml"));
