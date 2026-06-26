@@ -64,9 +64,9 @@ Seven sequential passes. Each fires independently; all detections are cumulative
 | ScriptIntrusion | 0.40 |
 | Leetspeak | 0.30 |
 
-Recommended thresholds:
-- `score >= 0.25` → **flag** (verification fail, log alert)
-- `score >= 0.60` → **block** (stop-and-ask, halt request)
+Default thresholds (configurable via [`Config`](#configuration)):
+- `score >= 0.25` → **flag** (`should_flag()` — log alert, verification fail)
+- `score >= 0.60` → **block** (`should_block()` — stop-and-ask, halt request)
 
 ---
 
@@ -88,6 +88,47 @@ let r = Normalizer::new()
     .enable(PassKind::Leetspeak)
     .analyze(input);
 ```
+
+---
+
+## Configuration
+
+All thresholds and pass weights are runtime-configurable via a `Config` struct. Load a partial TOML file — missing fields fall back to defaults.
+
+```toml
+# config.toml
+flag_threshold  = 0.25
+block_threshold = 0.60
+
+# tighten homoglyph weight for high-sensitivity deployments
+weight_homoglyph = 0.70
+
+# relax leet for gaming contexts where 1337 is normal
+weight_leet  = 0.10
+leet_min_pct = 60
+```
+
+```rust
+use deobfuscate::{Config, Normalizer};
+use std::path::Path;
+
+// From file (returns Config::default() if file missing)
+let config = Config::from_file(Path::new("config.toml"));
+
+// From inline TOML string
+let config = Config::from_toml("block_threshold = 0.90").unwrap();
+
+// Inline struct override
+let config = Config { weight_homoglyph: 1.0, ..Config::default() };
+
+let result = Normalizer::default()
+    .with_config(config)
+    .analyze(input);
+```
+
+`Config` requires the `serde` feature (enabled by default). Disable with `default-features = false` for a no-serde build.
+
+See [`examples/config.toml`](examples/config.toml) for the full field list with comments.
 
 ---
 

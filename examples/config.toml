@@ -1,0 +1,29 @@
+# deobfuscate — example configuration
+# All fields are optional. Missing fields fall back to documented defaults.
+# Load with: Config::from_file(Path::new("config.toml"))
+
+# ── Decision thresholds ──────────────────────────────────────────────────────
+flag_threshold  = 0.25   # score >= this → should_flag() (default 0.25)
+block_threshold = 0.60   # score >= this → should_block() (default 0.60)
+
+# ── CjkSuperposition ─────────────────────────────────────────────────────────
+cjk_super_threshold    = 0.55   # entropy threshold for spike detection
+# cjk_super_window       = 6
+# cjk_super_min_cjk_frac = 0.40
+
+# ── Per-pass weights ─────────────────────────────────────────────────────────
+# Tighten homoglyph weight for high-sensitivity deployments
+weight_homoglyph = 0.70
+
+# Relax leet for gaming contexts where 1337 is normal
+weight_leet = 0.10
+leet_min_pct = 60
+
+# ── Other tunable thresholds ─────────────────────────────────────────────────
+# entropy_high        = 5.2    # Shannon entropy (bits) above which a token is suspicious
+# entropy_min_english = 0.15   # English bigram coverage below which a token is suspicious
+# url_min_run         = 3      # minimum consecutive %XX bytes to trigger
+# html_min_entities   = 4      # minimum entity count before HTML pass fires
+# base64_min_len      = 12
+# morse_min_span      = 10
+# morse_min_morse_pct = 60
