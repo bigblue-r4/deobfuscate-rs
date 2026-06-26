@@ -90,6 +90,9 @@ pub enum PassKind {
     UrlEncoding,
     /// HTML entity sequences decoded. ≥4 entities whose decoded text contains injection keyword.
     HtmlEntities,
+    /// Injection keyword reconstructed from fragments split across non-alpha separators.
+    /// Detection only — does not modify text.
+    SplitString,
 }
 
 impl std::fmt::Display for PassKind {
@@ -109,6 +112,7 @@ impl std::fmt::Display for PassKind {
             PassKind::EntropyBigram    => "entropy-bigram",
             PassKind::UrlEncoding      => "url-encoding",
             PassKind::HtmlEntities     => "html-entities",
+            PassKind::SplitString      => "split-string",
         })
     }
 }
@@ -213,6 +217,7 @@ const DEFAULT_WEIGHT_ENTROPY:         f32   = 0.50;
 const DEFAULT_WEIGHT_SCRIPT:          f32   = 0.40;
 const DEFAULT_WEIGHT_NFC:             f32   = 0.35;
 const DEFAULT_WEIGHT_LEET:            f32   = 0.30;
+const DEFAULT_WEIGHT_SPLIT_STRING:    f32   = 0.70;
 
 // Serde per-field default functions — only compiled with the `serde` feature.
 #[cfg(feature = "serde")] fn serde_flag_threshold()         -> f32   { DEFAULT_FLAG_THRESHOLD }
@@ -242,6 +247,7 @@ const DEFAULT_WEIGHT_LEET:            f32   = 0.30;
 #[cfg(feature = "serde")] fn serde_weight_script()          -> f32   { DEFAULT_WEIGHT_SCRIPT }
 #[cfg(feature = "serde")] fn serde_weight_nfc()             -> f32   { DEFAULT_WEIGHT_NFC }
 #[cfg(feature = "serde")] fn serde_weight_leet()            -> f32   { DEFAULT_WEIGHT_LEET }
+#[cfg(feature = "serde")] fn serde_weight_split_string()    -> f32   { DEFAULT_WEIGHT_SPLIT_STRING }
 
 /// Runtime configuration for all pass thresholds and weights.
 ///
@@ -349,6 +355,9 @@ pub struct Config {
     /// Weight for Leetspeak detections. Default 0.30.
     #[cfg_attr(feature = "serde", serde(default = "serde_weight_leet"))]
     pub weight_leet: f32,
+    /// Weight for SplitString detections. Default 0.70.
+    #[cfg_attr(feature = "serde", serde(default = "serde_weight_split_string"))]
+    pub weight_split_string: f32,
 }
 
 impl Default for Config {
@@ -381,6 +390,7 @@ impl Default for Config {
             weight_script:          DEFAULT_WEIGHT_SCRIPT,
             weight_nfc:             DEFAULT_WEIGHT_NFC,
             weight_leet:            DEFAULT_WEIGHT_LEET,
+            weight_split_string:    DEFAULT_WEIGHT_SPLIT_STRING,
         }
     }
 }
@@ -501,6 +511,7 @@ impl Normalizer {
         };
 
         if self.has(&PassKind::EntropyBigram) { pass_entropy_bigram(&mut text, &mut detections, cfg); }
+        if self.has(&PassKind::SplitString)   { pass_split_string(&mut text, &mut detections); }
 
         let obfuscation_score = compute_score(&detections, script_score, leet_score, cfg);
         NormalizationResult {
@@ -531,6 +542,7 @@ impl Default for Normalizer {
         n.enabled.insert(PassKind::ScriptIntrusion);
         n.enabled.insert(PassKind::Leetspeak);
         n.enabled.insert(PassKind::EntropyBigram);
+        n.enabled.insert(PassKind::SplitString);
         n
     }
 }
@@ -2241,6 +2253,9 @@ const INJECTION_KEYWORDS: &[&str] = &[
     "ignore", "disregard", "bypass", "system prompt", "instruction",
     "pwned", "whoami", "exec", "eval", "import", "os.system",
     "child_process", "shell", "bash", "powershell",
+    "system", "prompt", "override", "jailbreak", "forget", "reset",
+    "sudo", "admin", "root", "chmod", "curl", "wget",
+    "python", "javascript", "script",
 ];
 
 const MORSE_TABLE: &[(char, &str)] = &[
@@ -2937,6 +2952,83 @@ fn pass_entropy_bigram(text: &mut String, detections: &mut Vec<Detection>, confi
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Split-string pass
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn pass_split_string(text: &mut String, detections: &mut Vec<Detection>) {
+    if text.len() < 8 { return; }
+
+    // Skeleton: (lowercased ascii-alpha char, byte position in original text)
+    let skeleton: Vec<(char, usize)> = text
+        .char_indices()
+        .filter(|(_, c)| c.is_ascii_alphabetic())
+        .map(|(i, c)| (c.to_ascii_lowercase(), i))
+        .collect();
+
+    // Only check purely alphabetic keywords — non-alpha keywords ("os.system", "system prompt")
+    // cannot be matched against an alpha-only skeleton.
+    let alpha_keywords: Vec<&str> = INJECTION_KEYWORDS
+        .iter()
+        .copied()
+        .filter(|kw| kw.chars().all(|c| c.is_ascii_alphabetic()))
+        .collect();
+
+    let min_kw_len = alpha_keywords.iter().map(|kw| kw.len()).min().unwrap_or(usize::MAX);
+    if skeleton.len() < min_kw_len { return; }
+
+    let lower_text = text.to_lowercase();
+
+    for &keyword in &alpha_keywords {
+        if keyword.len() > skeleton.len() { continue; }
+        // Skip verbatim occurrences — already present as plain text, not a split attack.
+        if lower_text.contains(keyword) { continue; }
+
+        // Greedy subsequence match against the skeleton.
+        let kw_chars: Vec<char> = keyword.chars().collect();
+        let mut matched_positions: Vec<usize> = Vec::new();
+        let mut skeleton_idx = 0;
+        let mut found = true;
+
+        for &kc in &kw_chars {
+            let mut found_char = false;
+            while skeleton_idx < skeleton.len() {
+                if skeleton[skeleton_idx].0 == kc {
+                    matched_positions.push(skeleton[skeleton_idx].1);
+                    skeleton_idx += 1;
+                    found_char = true;
+                    break;
+                }
+                skeleton_idx += 1;
+            }
+            if !found_char { found = false; break; }
+        }
+
+        if !found { continue; }
+
+        // Count segments: consecutive matched positions with gap > 1 mean a separator exists.
+        let mut segment_count = 1usize;
+        for i in 1..matched_positions.len() {
+            if matched_positions[i] > matched_positions[i - 1] + 1 {
+                segment_count += 1;
+            }
+        }
+        if segment_count < 2 { continue; } // contiguous — confidence 0.0, skip
+
+        let confidence = if segment_count >= 3 { 1.0f32 } else { 0.5f32 };
+
+        detections.push(Detection {
+            kind: PassKind::SplitString,
+            original: text.clone(),
+            normalized: text.clone(),
+            detail: format!(
+                "keyword {:?} reconstructed from {} segments (confidence {:.1})",
+                keyword, segment_count, confidence
+            ),
+        });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Score computation
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2955,6 +3047,7 @@ fn compute_score(detections: &[Detection], script_score: f32, leet_score: f32, c
         PassKind::ScriptIntrusion  => config.weight_script,
         PassKind::PreScanNfc       => config.weight_nfc,
         PassKind::Leetspeak        => config.weight_leet,
+        PassKind::SplitString      => config.weight_split_string,
         PassKind::CjkSuperposition => 1.0,
     }).sum();
     score += script_score * 0.60;
@@ -3491,6 +3584,82 @@ mod tests {
         let r = Normalizer::default().with_config(config).analyze(input);
         assert!(r.should_flag(),   "score 0.90 still flags (flag_threshold=0.25)");
         assert!(!r.should_block(), "score 0.90 must NOT block (block_threshold=0.95)");
+    }
+
+    // ── SplitString tests ─────────────────────────────────────────────────────
+
+    #[test]
+    fn split_string_basic_fragmented() {
+        // "ignore" split by dots across 3 segments — should fire
+        let r = run("ig.no.re all");
+        assert!(
+            r.detections.iter().any(|d| d.kind == PassKind::SplitString),
+            "dot-fragmented 'ignore' must trigger SplitString"
+        );
+    }
+
+    #[test]
+    fn split_string_cjk_spacer() {
+        // Latin fragments with CJK spacers — should fire
+        let r = run("ig\u{4E2D}no\u{5B57}re");
+        assert!(
+            r.detections.iter().any(|d| d.kind == PassKind::SplitString),
+            "CJK-spaced 'ignore' must trigger SplitString"
+        );
+    }
+
+    #[test]
+    fn split_string_zero_width_spacer() {
+        // Zero-width spaces between fragments. BiDi would strip them, so disable it to keep
+        // them visible for SplitString. Expect SplitString fires on the remaining fragments.
+        let r = Normalizer::default()
+            .disable(PassKind::BiDiControl)
+            .analyze("ig\u{200B}no\u{200B}re");
+        assert!(
+            r.detections.iter().any(|d| d.kind == PassKind::SplitString),
+            "zero-width-spaced 'ignore' (BiDi disabled) must trigger SplitString"
+        );
+    }
+
+    #[test]
+    fn split_string_contiguous_no_fire() {
+        // "ignore" is present verbatim — SplitString must not fire (confidence 0.0)
+        let r = run("ignore all instructions");
+        assert!(
+            !r.detections.iter().any(|d| d.kind == PassKind::SplitString),
+            "contiguous 'ignore' must NOT trigger SplitString"
+        );
+    }
+
+    #[test]
+    fn split_string_system_prompt_detected() {
+        // Two keywords split: "sys.tem" and "pr_ompt"
+        let r = run("sys.tem pr_ompt");
+        assert!(
+            r.detections.iter().any(|d| d.kind == PassKind::SplitString),
+            "split 'system' or 'prompt' must trigger SplitString"
+        );
+    }
+
+    #[test]
+    fn split_string_short_input_gated() {
+        // Input is too short for the gate (< 8 bytes) — must not fire
+        let r = run("ig.no");
+        assert!(
+            !r.detections.iter().any(|d| d.kind == PassKind::SplitString),
+            "short input (< 8 chars) must be gated out"
+        );
+    }
+
+    #[test]
+    fn split_string_disabled() {
+        let r = Normalizer::default()
+            .disable(PassKind::SplitString)
+            .analyze("ig.no.re");
+        assert!(
+            !r.detections.iter().any(|d| d.kind == PassKind::SplitString),
+            "disabled SplitString must not appear in detections"
+        );
     }
 
     #[cfg(feature = "serde")]
