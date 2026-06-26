@@ -171,6 +171,7 @@ r.detections          // Vec<Detection> — full detail per event
     .original         //   obfuscated span
     .normalized       //   replacement
     .detail           //   human description
+    .confidence()     //   f32 in [0.0, 1.0] — likelihood of real attack
 ```
 
 ---
@@ -203,7 +204,7 @@ Example record:
   "blocked": true,
   "passes_fired": ["unicode-escape"],
   "detections": [
-    { "pass": "unicode-escape", "original_len": 28, "normalized_len": 6, "detail": "unicode-escape decoded 4 sequence(s) [hex-byte]; result contains keyword: ignore" }
+    { "pass": "unicode-escape", "original_len": 28, "normalized_len": 6, "detail": "unicode-escape decoded 4 sequence(s) [hex-byte]; result contains keyword: ignore", "confidence": 0.9 }
   ]
 }
 ```
@@ -268,7 +269,6 @@ version numbers).
 
 API improvements planned:
 - `no_std` mode (drop filesystem deps, embed decoder)
-- Per-token confidence scores
 
 ---
 
