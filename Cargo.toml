@@ -1,6 +1,6 @@
 [package]
 name        = "deobfuscate"
-version     = "1.8.0"
+version     = "1.9.0"
 edition     = "2021"
 description = "Multi-pass text deobfuscation and encoding-evasion detector for LLM security pipelines."
 license     = "MIT"
@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = ["serde", "audit"]
 serde   = ["dep:serde", "dep:toml"]
-audit   = ["serde", "dep:sha2"]
+audit   = ["serde", "dep:sha2", "dep:serde_json"]
 wasm    = ["dep:wasm-bindgen", "dep:js-sys"]
 
 [dependencies]
@@ -24,6 +24,7 @@ unicode-normalization = "0.1"
 serde        = { version = "1", features = ["derive"], optional = true }
 toml         = { version = "0.8", optional = true }
 sha2         = { version = "0.10", optional = true }
+serde_json   = { version = "1",    optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys       = { version = "0.3", optional = true }
 

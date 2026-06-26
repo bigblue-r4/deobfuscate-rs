@@ -13,9 +13,9 @@
 | License | MIT |
 | crates.io | https://crates.io/crates/deobfuscate |
 | GitHub | https://github.com/bigblue-r4/deobfuscate-rs |
-| Current version | **v1.8.0** (ready to publish) |
-| Test count | **75 unit tests + 2 doc tests** — all green |
-| Source file | Single file: `src/lib.rs` (~3,900 lines) + `src/wasm.rs` |
+| Current version | **v1.9.0** |
+| Test count | **86 unit tests + 2 doc tests** — all green |
+| Source file | Single file: `src/lib.rs` (~4,100 lines) + `src/wasm.rs` |
 
 ---
 
@@ -46,6 +46,7 @@ community.
 | v1.6.0 | 2026-06-25 | SplitString pass; INJECTION_KEYWORDS expanded 15 → 30 | +7 → 65 |
 | v1.7.0 | 2026-06-25 | WASM target (wasm feature); audit feature + sha2; cdylib+rlib; README overhaul; CI workflow | +0 → 65 |
 | v1.8.0 | 2026-06-25 | UnicodeEscape pass — \xNN, \uNNNN, \u{N}, octal char escapes decoded | +10 → 75 |
+| v1.9.0 | 2026-06-25 | Audit feature — SHA-256 hash, timestamp, payload-free JSONL per call | +11 → 86 |
 
 ---
 
@@ -77,6 +78,15 @@ community.
 |------|---------------------|----------|
 | `Rot13` | Caesar-13 substitution | Medium |
 | `Punycode` | IDN `xn--` hostnames embedded in text | Low |
+
+### Audit feature
+
+`AuditRecord` and `DetectionRecord` attached to every `NormalizationResult` (feature = "audit", default on).
+- SHA-256 hex of raw input computed BEFORE any normalization
+- Manual RFC 3339 UTC timestamp (Howard Hinnant civil_from_days — no chrono dep)
+- Empty timestamp on wasm32
+- `append_jsonl(path)` helper for append-only SIEM logs
+- 11 tests: hash stability, halt-path coverage, payload isolation, round-trip JSON, known-timestamp values
 
 ---
 
@@ -131,7 +141,7 @@ Config::from_file(path: &Path)          // file, fallback to default (non-wasm32
 | Feature | Default | What it enables |
 |---------|---------|-----------------|
 | `serde` | yes | Config TOML deserialization; `from_toml()`, `from_file()` |
-| `audit` | yes | sha2 dep (forward-looking — no audit code yet) |
+| `audit` | yes | `AuditRecord` + `DetectionRecord`; sha2 hash; serde_json JSONL methods |
 | `wasm`  | no  | wasm-bindgen + js-sys; JS callable API in src/wasm.rs |
 
 ### WASM API (wasm feature)
@@ -220,7 +230,7 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 | `SplitString` greedy skeleton can false-positive on verbatim keywords | Fixed v1.6.0 | Verbatim pre-check (`lower_text.contains(keyword)`) prevents this |
 | `Config::from_file` not available on wasm32 | By design | Gated `#[cfg(not(target_arch = "wasm32"))]` |
 | No `no_std` support | Open | Would need to drop filesystem deps and embed base64 decoder |
-| `audit` feature has sha2 dep but no audit code yet | Forward-looking | Placeholder for JSONL audit trail signing in a future version |
+| Audit detail strings may embed decoded snippets | By design | Truncated to 200 chars in DetectionRecord; raw input never stored |
 | `SplitString` detection-only (does not normalize text) | By design | Keyword fragments can't be safely removed without semantic context |
 | Semantic attacks (DAN jailbreaks, roleplay framing) | Out of scope | Require LLM-level reasoning; handled by Stage 1 in split-brain-harness |
 | Rot13, Punycode passes | Not implemented | On roadmap |
@@ -253,6 +263,6 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 ## Next Session Starting Points
 
 1. **`Rot13` pass** — detect Caesar-13 in all-alpha tokens. Low complexity, adds coverage.
-3. **`audit` feature** — implement JSONL audit trail with sha2 content hashing. Each detection event gets a SHA-256 fingerprint. Pairs with `split-brain-harness` forge audit trail.
-4. **Per-token confidence scores** — each Detection gets a `confidence: f32` based on decode success rate, match purity, and token length.
-5. **Publish GitHub releases v1.1.0–v1.6.0** — only v1.0.0 and v1.7.0 have releases; the intermediate versions are missing.
+2. **Per-token confidence scores** — each Detection gets a `confidence: f32` based on decode success rate, match purity, and token length.
+3. **`audit` HMAC signing** — add HMAC-SHA256 signature to AuditRecord for tamper-evident log chaining.
+4. **Publish GitHub releases v1.1.0–v1.6.0** — only v1.0.0 and v1.7.0 have releases; the intermediate versions are missing.

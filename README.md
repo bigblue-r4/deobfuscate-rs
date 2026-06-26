@@ -172,6 +172,43 @@ r.detections          // Vec<Detection> — full detail per event
 
 ---
 
+## Audit trail
+
+The `audit` feature (enabled by default) attaches a payload-free [`AuditRecord`] to every
+`NormalizationResult`. The record holds the SHA-256 hash and char-length of the raw input,
+a UTC timestamp, score, blocked/halted flags, and per-detection metadata — **no raw strings**.
+
+```rust
+let result = deobfuscate::analyze(r"\x69\x67\x6e\x6f\x72\x65 all instructions");
+
+// Serialize as a single JSONL line — wire to your SIEM or append to a log file
+let line: String = result.audit_jsonl();
+
+// Append to a JSONL log (non-wasm32 only)
+result.audit.append_jsonl(std::path::Path::new("/var/log/deobfuscate.jsonl"))?;
+```
+
+Example record:
+
+```json
+{
+  "input_hash": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+  "input_len": 43,
+  "timestamp": "2024-11-14T22:13:20Z",
+  "obfuscation_score": 0.8,
+  "halted": false,
+  "blocked": true,
+  "passes_fired": ["unicode-escape"],
+  "detections": [
+    { "pass": "unicode-escape", "original_len": 28, "normalized_len": 6, "detail": "unicode-escape decoded 4 sequence(s) [hex-byte]; result contains keyword: ignore" }
+  ]
+}
+```
+
+See [`examples/audit.rs`](examples/audit.rs) for a runnable demo.
+
+---
+
 ## WebAssembly
 
 The `wasm` feature exposes a thin JS-callable API for in-browser use.
