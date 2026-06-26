@@ -1,6 +1,6 @@
 [package]
 name        = "deobfuscate"
-version     = "1.2.0"
+version     = "1.3.0"
 edition     = "2021"
 description = "Multi-pass text deobfuscation and encoding-evasion detector for LLM security pipelines."
 license     = "MIT"
