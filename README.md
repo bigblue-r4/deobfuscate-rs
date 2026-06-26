@@ -205,9 +205,32 @@ Example record:
   "passes_fired": ["unicode-escape"],
   "detections": [
     { "pass": "unicode-escape", "original_len": 28, "normalized_len": 6, "detail": "unicode-escape decoded 4 sequence(s) [hex-byte]; result contains keyword: ignore", "confidence": 0.9 }
-  ]
+  ],
+  "prev_hmac": null,
+  "signature": null
 }
 ```
+
+### HMAC signing
+
+Sign a record with your secret key to create a tamper-evident chain:
+
+```rust
+let result = deobfuscate::analyze(input);
+let mut rec = result.audit.clone();
+
+// Optional: link to the previous record for chaining
+rec.prev_hmac = prev_signature;
+
+rec.sign(b"your-secret-key");
+assert!(rec.verify(b"your-secret-key")); // true
+
+// Any field change — including prev_hmac — breaks the signature
+rec.obfuscation_score = 0.0;
+assert!(!rec.verify(b"your-secret-key")); // false
+```
+
+The signature is HMAC-SHA256 over the canonical JSON of the record with `signature` = null. The `prev_hmac` field is included in what is signed, so tampering with the chain link is detectable.
 
 See [`examples/audit.rs`](examples/audit.rs) for a runnable demo.
 

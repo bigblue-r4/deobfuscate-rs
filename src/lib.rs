@@ -235,6 +235,14 @@ pub struct AuditRecord {
     pub passes_fired: Vec<String>,
     /// One entry per [`Detection`] — lengths only, no raw payload.
     pub detections: Vec<DetectionRecord>,
+    /// HMAC-SHA256 of the previous record in the chain (hex). `None` for the first record.
+    /// Include before calling [`sign`](AuditRecord::sign) to create a verifiable chain.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub prev_hmac: Option<String>,
+    /// HMAC-SHA256 signature over this record's canonical form (with `signature` = null).
+    /// Set by [`sign`](AuditRecord::sign); verified by [`verify`](AuditRecord::verify).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub signature: Option<String>,
 }
 
 #[cfg(feature = "audit")]
@@ -248,11 +256,59 @@ impl AuditRecord {
         let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path)?;
         writeln!(f, "{}", line)
     }
+
+    /// Signs this record with HMAC-SHA256 and stores the hex digest in `self.signature`.
+    ///
+    /// The signature covers all fields **except** `signature` itself (which is set to null
+    /// before serialization). If `prev_hmac` is set, it is included in the signed content,
+    /// creating a tamper-evident chain: altering `prev_hmac` after signing will fail `verify`.
+    pub fn sign(&mut self, key: &[u8]) {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+        let bytes = self.canonical_bytes();
+        let mut mac = Hmac::<Sha256>::new_from_slice(key)
+            .expect("HMAC accepts any key length");
+        mac.update(&bytes);
+        let result = mac.finalize().into_bytes();
+        self.signature = Some(result.iter().map(|b| format!("{:02x}", b)).collect());
+    }
+
+    /// Verifies this record's HMAC-SHA256 signature against `key`.
+    ///
+    /// Returns `false` if the record is unsigned, if the hex is malformed, or if the
+    /// signature does not match. Uses constant-time comparison to prevent timing attacks.
+    pub fn verify(&self, key: &[u8]) -> bool {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+        let Some(ref sig) = self.signature else { return false; };
+        let Some(sig_bytes) = audit_decode_hex(sig) else { return false; };
+        let bytes = self.canonical_bytes();
+        let mut mac = Hmac::<Sha256>::new_from_slice(key)
+            .expect("HMAC accepts any key length");
+        mac.update(&bytes);
+        mac.verify_slice(&sig_bytes).is_ok()
+    }
+
+    /// Canonical serialization for signing: all fields with `signature` set to `None`.
+    #[cfg(feature = "serde")]
+    fn canonical_bytes(&self) -> Vec<u8> {
+        let mut tmp = self.clone();
+        tmp.signature = None;
+        serde_json::to_vec(&tmp).unwrap_or_default()
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Audit helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(feature = "audit")]
+fn audit_decode_hex(s: &str) -> Option<Vec<u8>> {
+    if !s.len().is_multiple_of(2) { return None; }
+    (0..s.len()).step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
+        .collect()
+}
 
 /// Howard Hinnant's civil_from_days: days-since-epoch → (year, month, day).
 #[cfg(all(feature = "audit", not(target_arch = "wasm32")))]
@@ -337,6 +393,8 @@ fn build_audit_record(
         blocked,
         passes_fired,
         detections: detection_records,
+        prev_hmac: None,
+        signature: None,
     }
 }
 
@@ -4449,6 +4507,81 @@ mod tests {
         let json = r.audit_json_pretty();
         assert!(json.contains("\"confidence\""),
             "audit JSON must contain confidence field; got:\n{}", json);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HMAC signing tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[cfg(feature = "audit")]
+    #[test]
+    fn hmac_sign_produces_64_hex_chars() {
+        let r = run("%69%67%6e%6f%72%65");
+        let mut rec = r.audit.clone();
+        assert!(rec.signature.is_none());
+        rec.sign(b"test-key");
+        let sig = rec.signature.as_deref().unwrap();
+        assert_eq!(sig.len(), 64, "HMAC-SHA256 hex must be 64 chars");
+        assert!(sig.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[cfg(feature = "audit")]
+    #[test]
+    fn hmac_verify_correct_key() {
+        let r = run("%69%67%6e%6f%72%65");
+        let mut rec = r.audit.clone();
+        rec.sign(b"correct-key");
+        assert!(rec.verify(b"correct-key"), "verify must succeed with correct key");
+    }
+
+    #[cfg(feature = "audit")]
+    #[test]
+    fn hmac_verify_wrong_key() {
+        let r = run("%69%67%6e%6f%72%65");
+        let mut rec = r.audit.clone();
+        rec.sign(b"correct-key");
+        assert!(!rec.verify(b"wrong-key"), "verify must fail with wrong key");
+    }
+
+    #[cfg(feature = "audit")]
+    #[test]
+    fn hmac_tamper_detection() {
+        let r = run("%69%67%6e%6f%72%65");
+        let mut rec = r.audit.clone();
+        rec.sign(b"key");
+        // Tamper with a field after signing
+        rec.obfuscation_score = 0.0;
+        assert!(!rec.verify(b"key"), "verify must fail after tampering with a field");
+    }
+
+    #[cfg(feature = "audit")]
+    #[test]
+    fn hmac_chain_links_records() {
+        let mut rec1 = run("%69%67%6e%6f%72%65").audit.clone();
+        rec1.sign(b"chain-key");
+
+        let mut rec2 = run("vtaber").audit.clone();
+        rec2.prev_hmac = rec1.signature.clone();
+        rec2.sign(b"chain-key");
+
+        assert!(rec1.verify(b"chain-key"), "rec1 must verify");
+        assert!(rec2.verify(b"chain-key"), "rec2 must verify");
+
+        // Break the chain link — rec2 must fail
+        rec2.prev_hmac = Some("00".repeat(32));
+        assert!(!rec2.verify(b"chain-key"), "breaking prev_hmac must invalidate rec2");
+    }
+
+    #[cfg(feature = "audit")]
+    #[test]
+    fn hmac_signature_in_audit_json() {
+        let r = run("%69%67%6e%6f%72%65");
+        let mut rec = r.audit.clone();
+        rec.sign(b"key");
+        // Serialize the record directly to check signature appears
+        let json = serde_json::to_string_pretty(&rec).unwrap();
+        assert!(json.contains("\"signature\""), "JSON must contain signature field");
+        assert!(json.contains("\"prev_hmac\""), "JSON must contain prev_hmac field");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
