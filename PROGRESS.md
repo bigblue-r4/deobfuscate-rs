@@ -13,9 +13,9 @@
 | License | MIT |
 | crates.io | https://crates.io/crates/deobfuscate |
 | GitHub | https://github.com/bigblue-r4/deobfuscate-rs |
-| Current version | **v1.7.0** (published 2026-06-25) |
-| Test count | **65 unit tests + 2 doc tests** — all green |
-| Source file | Single file: `src/lib.rs` (~3,700 lines) + `src/wasm.rs` |
+| Current version | **v1.8.0** (ready to publish) |
+| Test count | **75 unit tests + 2 doc tests** — all green |
+| Source file | Single file: `src/lib.rs` (~3,900 lines) + `src/wasm.rs` |
 
 ---
 
@@ -45,6 +45,7 @@ community.
 | v1.5.0 | 2026-06-25 | Config struct — all 28 thresholds/weights runtime-configurable via TOML | +7 → 58 |
 | v1.6.0 | 2026-06-25 | SplitString pass; INJECTION_KEYWORDS expanded 15 → 30 | +7 → 65 |
 | v1.7.0 | 2026-06-25 | WASM target (wasm feature); audit feature + sha2; cdylib+rlib; README overhaul; CI workflow | +0 → 65 |
+| v1.8.0 | 2026-06-25 | UnicodeEscape pass — \xNN, \uNNNN, \u{N}, octal char escapes decoded | +10 → 75 |
 
 ---
 
@@ -75,7 +76,6 @@ community.
 | Pass | What it would catch | Priority |
 |------|---------------------|----------|
 | `Rot13` | Caesar-13 substitution | Medium |
-| `UnicodeEscape` | `\x69gnore`, `\u{69}gnore` JS/Python escapes | High |
 | `Punycode` | IDN `xn--` hostnames embedded in text | Low |
 
 ---
@@ -223,7 +223,7 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 | `audit` feature has sha2 dep but no audit code yet | Forward-looking | Placeholder for JSONL audit trail signing in a future version |
 | `SplitString` detection-only (does not normalize text) | By design | Keyword fragments can't be safely removed without semantic context |
 | Semantic attacks (DAN jailbreaks, roleplay framing) | Out of scope | Require LLM-level reasoning; handled by Stage 1 in split-brain-harness |
-| Rot13, UnicodeEscape, Punycode passes | Not implemented | On roadmap |
+| Rot13, Punycode passes | Not implemented | On roadmap |
 
 ---
 
@@ -252,8 +252,7 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 
 ## Next Session Starting Points
 
-1. **`UnicodeEscape` pass** — detect `\x69gnore`, `\u{69}gnore`, `%u0069gnore` JS/Python escape sequences. High value: common in web injection attacks.
-2. **`Rot13` pass** — detect Caesar-13 in all-alpha tokens. Low complexity, adds coverage.
+1. **`Rot13` pass** — detect Caesar-13 in all-alpha tokens. Low complexity, adds coverage.
 3. **`audit` feature** — implement JSONL audit trail with sha2 content hashing. Each detection event gets a SHA-256 fingerprint. Pairs with `split-brain-harness` forge audit trail.
 4. **Per-token confidence scores** — each Detection gets a `confidence: f32` based on decode success rate, match purity, and token length.
 5. **Publish GitHub releases v1.1.0–v1.6.0** — only v1.0.0 and v1.7.0 have releases; the intermediate versions are missing.

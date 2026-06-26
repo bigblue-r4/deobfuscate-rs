@@ -36,7 +36,7 @@ if result.should_block() {
 
 ## Passes
 
-15 sequential passes in pipeline order. Each fires independently; detections accumulate.
+16 sequential passes in pipeline order. Each fires independently; detections accumulate.
 
 | Pass | Detects | Example |
 |------|---------|---------|
@@ -46,6 +46,7 @@ if result.should_block() {
 | `BiDiControl` | Invisible RTL/LTR override chars (U+202E, U+200B, …) | `"ignore\u{202E}all"` → `"ignoreall"` |
 | `FullwidthChars` | East-Asian fullwidth ASCII (U+FF01–U+FF5E) | `ＰＷＮＥＤ` → `PWNED` |
 | `BackslashEscape` | Per-character `\X` prefix-escaping | `\i\g\n\o\r\e` → `ignore` |
+| `UnicodeEscape` | `\xNN`, `\uNNNN`, `\u{N}`, octal escapes decoded | `\x69gnore` → `ignore` |
 | `UrlEncoding` | Percent-encoded runs (≥ 3 consecutive `%XX`) with injection keyword | `%69%67%6e%6f%72%65` → `ignore` |
 | `HtmlEntities` | Decimal, hex, named XML entities (≥ 4 entities + injection keyword) | `&#105;&#103;…` → `ignore` |
 | `Base64` | Explicit `b64.decode("…")` and bare blobs (≥ 12 chars) | `aWdub3Jl` → `ignore` |
@@ -71,7 +72,7 @@ if result.should_block() {
 | CjkSuperposition | 1.00 (HALT) |
 | BiDiControl | 0.90 |
 | Base64 | 0.85 |
-| BackslashEscape / MorseCode / UrlEncoding / HtmlEntities | 0.80 |
+| BackslashEscape / UnicodeEscape / MorseCode / UrlEncoding / HtmlEntities | 0.80 |
 | InvisibleStrip | 0.75 |
 | SplitString | 0.70 |
 | FullwidthChars | 0.65 |
@@ -223,7 +224,6 @@ version numbers).
 | Pass | Detects |
 |------|---------|
 | `Rot13` | Caesar-13 substitution in all-alpha tokens |
-| `UnicodeEscape` | `ignore`, `\x69gnore` JS/Python escape sequences |
 | `Punycode` | IDN `xn--` encoded hostnames embedded in text |
 
 API improvements planned:
