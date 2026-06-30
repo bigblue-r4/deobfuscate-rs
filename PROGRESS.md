@@ -13,9 +13,9 @@
 | License | MIT |
 | crates.io | https://crates.io/crates/deobfuscate |
 | GitHub | https://github.com/bigblue-r4/deobfuscate-rs |
-| Current version | **v1.9.0** |
-| Test count | **86 unit tests + 2 doc tests** — all green |
-| Source file | Single file: `src/lib.rs` (~4,100 lines) + `src/wasm.rs` |
+| Current version | **v1.13.0** |
+| Test count | **110 unit tests + 2 doc tests** — all green |
+| Source file | Single file: `src/lib.rs` (~4,800 lines) + `src/wasm.rs` |
 
 ---
 
@@ -47,10 +47,14 @@ community.
 | v1.7.0 | 2026-06-25 | WASM target (wasm feature); audit feature + sha2; cdylib+rlib; README overhaul; CI workflow | +0 → 65 |
 | v1.8.0 | 2026-06-25 | UnicodeEscape pass — \xNN, \uNNNN, \u{N}, octal char escapes decoded | +10 → 75 |
 | v1.9.0 | 2026-06-25 | Audit feature — SHA-256 hash, timestamp, payload-free JSONL per call | +11 → 86 |
+| v1.10.0 | 2026-06-25 | Rot13 pass — Caesar-13 in all-alpha tokens ≥ 4 chars | +6 → 92 |
+| v1.11.0 | 2026-06-25 | Punycode pass — IDN xn-- label decode via RFC 3492 | +6 → 98 |
+| v1.12.0 | 2026-06-26 | Per-token confidence scores — blended base + structural confidence | +6 → 104 |
+| v1.13.0 | 2026-06-26 | HMAC-SHA256 signing for tamper-evident AuditRecord chains | +6 → 110 |
 
 ---
 
-## All 15 Passes — Current Status
+## All 18 Passes — Current Status
 
 ### Pipeline order (top = runs first)
 
@@ -71,13 +75,11 @@ community.
 | 13 | `Leetspeak` | ✅ Complete | 0.30 | ≥35% leet substitution + ≥2 alpha chars |
 | 14 | `EntropyBigram` | ✅ Complete | 0.50 | Shannon entropy >5.2 OR English bigram <0.15 |
 | 15 | `SplitString` | ✅ Complete | 0.70 | Keyword fragmentation via alpha skeleton (detection only) |
+| 16 | `Rot13` | ✅ Complete | 0.80 | Caesar-13 in all-alpha tokens ≥ 4 chars containing injection keyword |
+| 17 | `Punycode` | ✅ Complete | 0.85 | IDN `xn--` label decode via RFC 3492, keyword check after confusable norm |
+| 18 | `Confidence` | ✅ Complete | n/a | Per-detection blended base + structural confidence score in [0.0, 1.0] |
 
-**Not yet implemented:**
-
-| Pass | What it would catch | Priority |
-|------|---------------------|----------|
-| `Rot13` | Caesar-13 substitution | Medium |
-| `Punycode` | IDN `xn--` hostnames embedded in text | Low |
+All 18 passes are implemented and active.
 
 ### Audit feature
 
@@ -233,7 +235,7 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 | Audit detail strings may embed decoded snippets | By design | Truncated to 200 chars in DetectionRecord; raw input never stored |
 | `SplitString` detection-only (does not normalize text) | By design | Keyword fragments can't be safely removed without semantic context |
 | Semantic attacks (DAN jailbreaks, roleplay framing) | Out of scope | Require LLM-level reasoning; handled by Stage 1 in split-brain-harness |
-| Rot13, Punycode passes | Not implemented | On roadmap |
+| No `no_std` support | Open | Would need to drop filesystem deps and embed base64 decoder |
 
 ---
 
@@ -243,7 +245,7 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 
 | Job | Command | Status |
 |-----|---------|--------|
-| Test (stable) | `cargo test --all-features` + `cargo test --no-default-features` | Added v1.7.0 |
+| Test (stable) | `cargo test --all-features` + `cargo test --no-default-features` | Added v1.7.0; no-default-features fixed v1.13.0 |
 | WASM check | `cargo check --target wasm32-unknown-unknown --features wasm --no-default-features` | Added v1.7.0 |
 | Clippy | `cargo clippy --all-features -- -D warnings` | Added v1.7.0 |
 
@@ -262,7 +264,7 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 
 ## Next Session Starting Points
 
-1. **`Rot13` pass** — detect Caesar-13 in all-alpha tokens. Low complexity, adds coverage.
-2. **Per-token confidence scores** — each Detection gets a `confidence: f32` based on decode success rate, match purity, and token length.
-3. **`audit` HMAC signing** — add HMAC-SHA256 signature to AuditRecord for tamper-evident log chaining.
-4. **Publish GitHub releases v1.1.0–v1.6.0** — only v1.0.0 and v1.7.0 have releases; the intermediate versions are missing.
+1. **Release automation** — `.github/workflows/release.yml`: on `v*` tag push, cargo publish + build WASM + create GitHub release from CHANGELOG entry.
+2. **Integration tests** — `tests/integration.rs`: end-to-end TOML config load → analyze → audit JSON output; HMAC sign → verify chain.
+3. **Benchmark suite** — `benches/deobfuscate_bench.rs` using criterion against the CyberEC dataset.
+4. **`no_std` mode** — drop filesystem deps, embed base64 decoder for embedded targets.

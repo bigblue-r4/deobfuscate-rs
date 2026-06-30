@@ -10,6 +10,8 @@ text for the model and a structured detection report for your audit trail.
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![crates.io](https://img.shields.io/crates/v/deobfuscate.svg)](https://crates.io/crates/deobfuscate)
 
+See [CHANGELOG.md](CHANGELOG.md) for full version history.
+
 ---
 
 ## Quick start
@@ -283,14 +285,19 @@ version numbers).
 
 ---
 
+## Recent additions (v1.10+)
+
+| Version | What was added |
+|---------|----------------|
+| v1.13.0 | `AuditRecord::sign()` / `verify()` — HMAC-SHA256 tamper-evident chain |
+| v1.12.0 | `Detection::confidence()` — blended base + structural confidence score |
+| v1.11.0 | `Punycode` pass — IDN `xn--` label decode via RFC 3492 |
+| v1.10.0 | `Rot13` pass — Caesar-13 in all-alpha tokens |
+
+See [CHANGELOG.md](CHANGELOG.md) for the full history.
+
 ## Roadmap
 
-| Pass | Detects |
-|------|---------|
-| `Rot13` | Caesar-13 substitution in all-alpha tokens |
-| `Punycode` | IDN `xn--` encoded hostnames embedded in text |
-
-API improvements planned:
 - `no_std` mode (drop filesystem deps, embed decoder)
 
 ---
