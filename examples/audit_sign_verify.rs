@@ -14,7 +14,10 @@ fn main() {
     println!("  input_hash : {}", rec1.input_hash);
     println!("  score      : {:.2}", rec1.obfuscation_score);
     println!("  blocked    : {}", rec1.blocked);
-    println!("  signature  : {}", rec1.signature.as_deref().unwrap_or("none"));
+    println!(
+        "  signature  : {}",
+        rec1.signature.as_deref().unwrap_or("none")
+    );
     println!("  verify(ok) : {}", rec1.verify(key));
     println!();
 
@@ -25,8 +28,14 @@ fn main() {
     rec2.sign(key);
 
     println!("Record 2 (chained)");
-    println!("  prev_hmac  : {}", rec2.prev_hmac.as_deref().unwrap_or("none"));
-    println!("  signature  : {}", rec2.signature.as_deref().unwrap_or("none"));
+    println!(
+        "  prev_hmac  : {}",
+        rec2.prev_hmac.as_deref().unwrap_or("none")
+    );
+    println!(
+        "  signature  : {}",
+        rec2.signature.as_deref().unwrap_or("none")
+    );
     println!("  verify(ok) : {}", rec2.verify(key));
     println!();
 

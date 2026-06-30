@@ -38,7 +38,7 @@ if result.should_block() {
 
 ## Passes
 
-18 sequential passes in pipeline order. Each fires independently; detections accumulate.
+19 sequential passes in pipeline order. Each fires independently; detections accumulate.
 
 | Pass | Detects | Example |
 |------|---------|---------|
@@ -53,13 +53,14 @@ if result.should_block() {
 | `HtmlEntities` | Decimal, hex, named XML entities (≥ 4 entities + injection keyword) | `&#105;&#103;…` → `ignore` |
 | `Base64` | Explicit `b64.decode("…")` and bare blobs (≥ 12 chars) | `aWdub3Jl` → `ignore` |
 | `MorseCode` | ITU Morse spans ≥ 10 chars, ≥ 60% Morse, ≥ 40% letter decode | `.... .- -.-. -.-` → `HACK` |
-| `Homoglyph` | 1,631-entry TR39 confusables: Cyrillic, Greek, Hebrew, Math/Script/Fraktur | `іgnοre` → `ignore` |
+| `Homoglyph` | 1,631-entry static confusables: Cyrillic, Greek, Hebrew, Math/Script/Fraktur | `іgnοre` → `ignore` |
 | `ScriptIntrusion` | Non-Latin char embedded inside a Latin word | `sy‌stem` (zero-width joiner) |
 | `Leetspeak` | Digit/symbol substitutions in dense-leet tokens (≥ 35% leet) | `1337h4x0r` → `ieetaxor` |
 | `EntropyBigram` | Shannon entropy > 5.2 bits OR English bigram coverage < 0.15 | High-entropy encoded blobs |
 | `SplitString` | Injection keyword fragmented across separators — detection only | `ig.no.re` reconstructed as `ignore` |
 | `Rot13` | ROT13 decoded in all-alpha tokens (≥ 4 chars) containing injection keyword | `vtaber` → `ignore` |
 | `Punycode` | IDN `xn--` label decoded via RFC 3492, keyword found after confusable normalization | `xn--shll-w4d` → `shell` |
+| `SkeletonMatch` | TR39 skeleton algorithm catches confusables outside the static table | `𝔢𝔵𝔢𝔠` → `exec` |
 
 > **⚠ HALT pass**: `CjkSuperposition` detects a forward/reverse Shannon entropy spike
 > caused by embedding CJK characters to hide a Latin injection payload. When it fires,
@@ -75,10 +76,9 @@ if result.should_block() {
 |------|--------|
 | CjkSuperposition | 1.00 (HALT) |
 | BiDiControl | 0.90 |
-| Base64 | 0.85 |
+| Base64 / Punycode | 0.85 |
 | BackslashEscape / UnicodeEscape / MorseCode / UrlEncoding / HtmlEntities / Rot13 | 0.80 |
-| Punycode | 0.85 |
-| InvisibleStrip | 0.75 |
+| InvisibleStrip / SkeletonMatch | 0.75 |
 | SplitString | 0.70 |
 | FullwidthChars | 0.65 |
 | Homoglyph | 0.55 |
@@ -285,14 +285,29 @@ version numbers).
 
 ---
 
-## Recent additions (v1.10+)
+## Three-tier confusable defense
 
-| Version | What was added |
-|---------|----------------|
-| v1.13.0 | `AuditRecord::sign()` / `verify()` — HMAC-SHA256 tamper-evident chain |
-| v1.12.0 | `Detection::confidence()` — blended base + structural confidence score |
-| v1.11.0 | `Punycode` pass — IDN `xn--` label decode via RFC 3492 |
-| v1.10.0 | `Rot13` pass — Caesar-13 in all-alpha tokens |
+Unicode confusable attacks — where visually similar characters from different scripts
+replace ASCII chars to hide injection keywords — are a real threat to LLM policy engines.
+[OpenAI Codex issue #13095](https://github.com/openai/codex/issues/13095) documents a live
+bypass of an exec-policy engine using exactly this class of attack.
+
+This library applies three layers:
+
+1. **Static HOMOGLYPHS table** (1,631 entries) — Cyrillic, Greek, Hebrew, Arabic-Indic,
+   and all mathematical style variants (bold, Fraktur, script, sans-serif, monospace).
+   Zero-allocation table lookup, runs before any LLM call.
+
+2. **Script-intrusion interference** — forward/reverse interference scoring detects
+   characters from a non-Latin script embedded inside a Latin word, even when the
+   individual characters aren't in the static table.
+
+3. **TR39 skeleton algorithm** (`SkeletonMatch` pass) — applies the formal Unicode
+   Technical Standard #39 skeleton algorithm via the `unicode_skeleton` crate. Maps
+   confusable strings to a canonical form and checks for injection keywords in the result.
+   Covers the ~793 confusable-vision pairs not in the TR39 reference confusables list
+   (pairs found by rendering 26.5M character pairs across 230 fonts). Only fires on
+   input containing non-ASCII characters.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full history.
 

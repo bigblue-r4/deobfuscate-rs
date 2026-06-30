@@ -10,7 +10,10 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let path = std::env::temp_dir().join("deobfuscate_audit.jsonl");
-        result.audit.append_jsonl(&path).expect("failed to write audit log");
+        result
+            .audit
+            .append_jsonl(&path)
+            .expect("failed to write audit log");
         println!("\nAppended JSONL record to {}", path.display());
     }
 }

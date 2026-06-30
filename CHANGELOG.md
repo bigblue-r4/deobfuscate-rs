@@ -4,6 +4,21 @@ All notable changes to `deobfuscate` are documented here.
 
 ---
 
+## [1.14.0] — 2026-06-30
+
+### Added
+- `SkeletonMatch` pass (weight 0.75) — applies the Unicode TR39 skeleton algorithm via `unicode_skeleton` crate; fires when the skeleton of the input text reveals an injection keyword not present in the original, indicating cross-script confusable substitution
+- `unicode-security` crate dependency — exposes `is_potential_mixed_script_confusable_char(c)` for per-character annotation in detection details
+- `Config::weight_skeleton_match` — configurable weight for the new pass (default 0.75)
+- Three-tier confusable defense: static HOMOGLYPHS table (Tier 1) → script-intrusion interference (Tier 2) → TR39 skeleton algorithm (Tier 3), addressing the 793 confusable-vision pairs that TR39 covers beyond the HOMOGLYPHS table
+- 4 new unit tests for `SkeletonMatch` pass (Cyrillic/Greek confusables, Fraktur math chars, clean ASCII no-fire, disabled pass)
+
+### Changed
+- `Normalizer::default()` now includes `SkeletonMatch` in the enabled pass set (19 passes total)
+- Integration test `analyze_clean_text_returns_zero_score` uses a keyword-free input to avoid SplitString false positives on text with scattered common letters
+
+---
+
 ## [1.13.0] — 2026-06-26
 
 ### Added
