@@ -50,16 +50,21 @@ pub fn analyze_text(input: &str) -> JsValue {
         };
     }
 
-    set!("normalized",         JsValue::from_str(&result.normalized));
-    set!("obfuscation_score",  JsValue::from_f64(result.obfuscation_score as f64));
-    set!("is_obfuscated",      JsValue::from_bool(result.is_obfuscated()));
-    set!("should_flag",        JsValue::from_bool(result.should_flag()));
-    set!("should_block",       JsValue::from_bool(result.should_block()));
+    set!("normalized", JsValue::from_str(&result.normalized));
+    set!(
+        "obfuscation_score",
+        JsValue::from_f64(result.obfuscation_score as f64)
+    );
+    set!("is_obfuscated", JsValue::from_bool(result.is_obfuscated()));
+    set!("should_flag", JsValue::from_bool(result.should_flag()));
+    set!("should_block", JsValue::from_bool(result.should_block()));
 
-    let was_halted = result.detections.iter()
+    let was_halted = result
+        .detections
+        .iter()
         .any(|d| d.kind == crate::PassKind::CjkSuperposition);
     set!("was_halted", JsValue::from_bool(was_halted));
-    set!("summary",    JsValue::from_str(&result.summary()));
+    set!("summary", JsValue::from_str(&result.summary()));
 
     let passes = js_sys::Array::new();
     for kind in result.detection_kinds() {
