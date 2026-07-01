@@ -71,3 +71,30 @@ jobs:
 
       - name: cargo clippy
         run: cargo clippy --all-features -- -D warnings
+
+  fuzz-smoke:
+    name: Fuzz smoke — 60s per target
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry + fuzz target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            fuzz/target
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Fuzz analyze
+        run: cargo +nightly fuzz run analyze -- -max_total_time=60
+
+      - name: Fuzz config_toml
+        run: cargo +nightly fuzz run config_toml -- -max_total_time=60

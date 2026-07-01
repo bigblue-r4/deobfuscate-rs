@@ -397,7 +397,13 @@ fn build_audit_record(
             detail: {
                 let s = &d.detail;
                 if s.len() > 200 {
-                    format!("{}...", &s[..200])
+                    // Byte-index truncation must land on a char boundary or
+                    // slicing panics on multi-byte UTF-8.
+                    let mut end = 200;
+                    while !s.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    format!("{}...", &s[..end])
                 } else {
                     s.clone()
                 }
@@ -5752,6 +5758,18 @@ mod tests {
             det.original_len > det.normalized_len,
             "backslash-prefixed text should be longer than decoded form"
         );
+    }
+
+    #[test]
+    fn audit_detail_truncation_respects_char_boundaries() {
+        // Fuzz regression: detail strings > 200 bytes with a multi-byte char
+        // straddling the truncation point must not panic mid-slice.
+        // Original crash input: "%8B%]%8B%" followed by a run of 0x10 bytes.
+        let input = format!("%8B%]%8B%{}", "\u{10}".repeat(27));
+        let r = analyze(&input);
+        for det in &r.audit.detections {
+            assert!(det.detail.len() <= 204, "detail must be truncated");
+        }
     }
 
     // ── SkeletonMatch pass ────────────────────────────────────────────────────
