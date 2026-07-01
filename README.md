@@ -93,6 +93,25 @@ Default thresholds (configurable via [`Config`](#configuration)):
 
 ---
 
+## Measured detection rates
+
+Evaluated against the versioned corpora in `tests/corpus/`: 24 adversarial
+samples covering all 19 pass categories, and 21 benign hard cases chosen to
+stress the detectors — git SHAs, UUIDs, API-key prefixes, shell commands,
+Japanese/French/German prose, math notation, and emoji.
+
+| Metric (default config) | Result |
+|--------------------------|--------|
+| Detection rate (flag, score ≥ 0.25) | **24/24 = 100%** |
+| Block rate (score ≥ 0.60) | 22/24 = 91.7% |
+| False positives on benign corpus | **0/21 = 0%** |
+
+Reproduce with `cargo run --example corpus_eval` for the per-category
+breakdown. Both rates are enforced in CI by `tests/corpus_eval.rs`, so a pass
+change that hurts either one fails the build.
+
+---
+
 ## Builder API
 
 By default all passes are enabled. Selectively enable or disable:

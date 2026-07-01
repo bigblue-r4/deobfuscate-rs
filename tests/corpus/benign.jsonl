@@ -1,0 +1,21 @@
+{"category":"prose","text":"The quarterly report shows a 12% increase in renewable energy adoption across the region."}
+{"category":"prose","text":"Please schedule the team meeting for Thursday at 2pm in conference room B."}
+{"category":"prose","text":"Follow the assembly instructions in the manual before mounting the solar panels."}
+{"category":"prose","text":"The system administrator will reset your password tomorrow morning."}
+{"category":"code","text":"let result: Vec<u32> = items.iter().map(|x| x * 2).collect();"}
+{"category":"code","text":"if err != nil { return fmt.Errorf(\"failed to open file: %w\", err) }"}
+{"category":"cli","text":"git commit -m 'fix: handle empty input in parser' && git push origin main"}
+{"category":"cli","text":"docker run -it --rm -v $(pwd):/app node:20 npm test"}
+{"category":"cli","text":"Set the DEBUG environment variable to true before running the tests."}
+{"category":"versions","text":"Upgraded dependencies: serde 1.0.203, tokio 1.38.0, axum 0.7.5"}
+{"category":"identifiers","text":"Deployed commit 8f3a2b9c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a to production"}
+{"category":"identifiers","text":"Request ID: 550e8400-e29b-41d4-a716-446655440000"}
+{"category":"identifiers","text":"API key prefix: sk-proj-Ab3dEf9hIjK2mNoP"}
+{"category":"urls","text":"See https://docs.rs/deobfuscate/latest for API documentation."}
+{"category":"non-english","text":"Le café est à côté de l'hôtel, près de la gare."}
+{"category":"non-english","text":"Die Straße ist wegen Bauarbeiten gesperrt. Bitte umfahren."}
+{"category":"non-english","text":"今日は天気がいいですね。散歩に行きましょう。"}
+{"category":"technical","text":"NIST SP 800-53 controls AC-2 and AU-12 apply to this system."}
+{"category":"technical","text":"The equation x^2 + y^2 = r^2 describes a circle of radius r."}
+{"category":"technical","text":"π ≈ 3.14159, and the Greek letter alpha (α) denotes the angle."}
+{"category":"emoji","text":"Great work team! 🎉 Ship it 🚀"}

@@ -4,6 +4,23 @@ All notable changes to `deobfuscate` are documented here.
 
 ---
 
+## [1.15.0] — 2026-07-01
+
+### Added
+- Adversarial corpus benchmark — `tests/corpus/{adversarial,benign}.jsonl` (24 attack samples across all 19 pass categories, 21 benign hard cases: git SHAs, UUIDs, shell commands, Japanese/French/German prose, math notation, emoji). `cargo run --example corpus_eval` prints the per-category breakdown; `tests/corpus_eval.rs` enforces 100% detection / 0 false positives in CI
+- `cargo-fuzz` harness — `fuzz/` with two targets: `analyze` (scoring invariants) and `config_toml` (TOML round-trip); 60s-per-target smoke job added to CI
+
+### Fixed
+- **UTF-8 boundary panic** (found by fuzzing) — `DetectionRecord` detail truncation sliced at byte 200 regardless of char boundaries, panicking on multi-byte UTF-8
+- **`SplitString` flagged nearly all English prose** — the greedy subsequence matcher allowed arbitrary gaps between keyword letters, so keyword letters scattered across ordinary words always matched. Keywords must now be contiguous in the alpha skeleton (the actual `ig.no.re` attack shape). This was the dominant false-positive source (benign corpus went from 90% FP to 0%)
+- **`CjkSuperposition` HALTed normal Japanese** — CJK punctuation (`。`, `、`, U+3000–303F) was classified as a foreign script zone, creating a fake injection seam in ordinary CJK prose
+- **`Rot13` fired on plain English** — a keyword already present verbatim in the original text (e.g. "system") counted as evidence after unrelated tokens were rot13'd; the keyword must now appear *because of* decoding
+- **`EntropyBigram` flagged normal English words** — the 30-entry bigram table scored words like "Thursday" below the English-coverage threshold; expanded to ~130 entries. Hex identifiers (git SHAs, UUIDs) and shell/path-shaped tokens are now skipped
+- **`Leetspeak` de-leeted hex identifiers** — git SHAs and UUIDs met the leet-density threshold and were rewritten into garbage, cascading into downstream passes; pure hex/UUID tokens are now skipped
+- **`Homoglyph`/`ScriptIntrusion` fired on standalone foreign letters** — a lone Greek `α` in math prose was "confusable" and `(α)` counted its parentheses as an ASCII word. Confusables now only count in attack-shaped tokens (mixed with ASCII alphanumerics, or entirely confusable); intrusion requires ≥2 ASCII alphanumerics in the word
+
+---
+
 ## [1.14.0] — 2026-06-30
 
 ### Added

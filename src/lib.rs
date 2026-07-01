@@ -1078,9 +1078,18 @@ const ENTROPY_MIN_ALPHA: usize = 6;
 const ENTROPY_CJK_GATE: f32 = 0.60;
 const ENTROPY_INPUT_MIN: usize = 12;
 
+// Top ~100 English bigrams by corpus frequency. A 30-entry table scored
+// ordinary words like "Thursday" below the 0.15 coverage threshold and
+// flagged plain English as encoded text.
 const ENGLISH_BIGRAMS: &[&str] = &[
     "TH", "HE", "IN", "ER", "AN", "RE", "ON", "EN", "AT", "ES", "ED", "IS", "IT", "AL", "AR", "ST",
-    "TO", "NT", "NG", "SE", "HA", "AS", "OU", "IO", "LE", "VE", "CO", "ME", "DE", "HI",
+    "TO", "NT", "NG", "SE", "HA", "AS", "OU", "IO", "LE", "VE", "CO", "ME", "DE", "HI", "ND", "TI",
+    "OR", "TE", "OF", "RI", "RO", "IC", "NE", "EA", "RA", "CE", "LI", "CH", "LL", "BE", "MA", "SI",
+    "OM", "UR", "CA", "EL", "TA", "LA", "NS", "DI", "FO", "HO", "PE", "EC", "PR", "NO", "CT", "US",
+    "AC", "OT", "IL", "TR", "LY", "NC", "ET", "UT", "SS", "SO", "RS", "UN", "LO", "WA", "GE", "IE",
+    "WH", "EE", "WI", "EM", "AD", "OL", "RT", "PO", "WE", "NA", "UL", "NI", "TS", "MO", "OW", "PA",
+    "IM", "MI", "AI", "SH", "IR", "SU", "ID", "OS", "IV", "IA", "AM", "FI", "CI", "VI", "PL", "IG",
+    "TU", "EV", "LD", "RY", "MP", "FE", "BL", "DA", "AY", "GH", "TY", "UP", "QU", "SC", "KE", "EX",
 ];
 
 /// Variation Selectors block (VS1–VS16).
@@ -2887,6 +2896,7 @@ fn cjk_script_zone(c: char) -> u8 {
         || (0x3400..=0x4DBF).contains(&n)
         || (0x20000..=0x2A6DF).contains(&n)
         || (0x3040..=0x30FF).contains(&n)  // Hiragana + Katakana
+        || (0x3000..=0x303F).contains(&n)  // CJK punctuation (。、「」) — normal in CJK prose
         || (0xAC00..=0xD7AF).contains(&n)  // Hangul syllables
         || (0x1100..=0x11FF).contains(&n)  // Hangul Jamo
         || (0xFF65..=0xFF9F).contains(&n)  // Halfwidth Katakana
@@ -3498,16 +3508,41 @@ fn pass_homoglyphs(
     let chars_before: Vec<char> = text.chars().collect();
     let mut replacements: Vec<(char, char, usize)> = Vec::new();
 
+    // A confusable only counts when its whitespace token is attack-shaped:
+    // either mixed with ASCII alphanumerics ("іgnοre") or made up entirely of
+    // confusable chars ("𝐢𝐠𝐧𝐨𝐫𝐞", "١٣٣٧"). A confusable letter next to plain
+    // punctuation ("the angle (α) is") is legitimate foreign/math text.
+    let n_chars = chars_before.len();
+    let mut token_replaceable = vec![false; n_chars];
+    let mut i = 0;
+    while i < n_chars {
+        if chars_before[i].is_whitespace() {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < n_chars && !chars_before[i].is_whitespace() {
+            i += 1;
+        }
+        let token = &chars_before[start..i];
+        let has_ascii = token.iter().any(|c| c.is_ascii_alphanumeric());
+        let all_confusable = token.iter().all(|c| table.contains_key(c));
+        for flag in &mut token_replaceable[start..i] {
+            *flag = has_ascii || all_confusable;
+        }
+    }
+
     let normalized: String = chars_before
         .iter()
         .enumerate()
         .map(|(i, &c)| {
-            if let Some(&ascii) = table.get(&c) {
-                replacements.push((c, ascii, i));
-                ascii
-            } else {
-                c
+            if token_replaceable[i] {
+                if let Some(&ascii) = table.get(&c) {
+                    replacements.push((c, ascii, i));
+                    return ascii;
+                }
             }
+            c
         })
         .collect();
 
@@ -3574,7 +3609,9 @@ fn has_script_intrusions(chars: &[char]) -> bool {
         if wc.len() < 3 {
             continue;
         }
-        let ascii = wc.iter().filter(|c| c.is_ascii()).count();
+        // Require ASCII letters/digits — punctuation around a foreign char
+        // ("(α)") is not a word for anything to intrude into.
+        let ascii = wc.iter().filter(|c| c.is_ascii_alphanumeric()).count();
         let non_ascii: Vec<&char> = wc.iter().filter(|c| !c.is_ascii()).collect();
         if ascii >= 2 && !non_ascii.is_empty() {
             let all_accents = non_ascii
@@ -3669,7 +3706,13 @@ fn pass_leet(text: &mut String, detections: &mut Vec<Detection>, config: &Config
             let alpha_count = chars.iter().filter(|c| c.is_alphanumeric()).count();
             let true_alpha = chars.iter().filter(|c| c.is_ascii_alphabetic()).count();
 
-            if alpha_count >= config.leet_min_alpha
+            // Hex blobs and UUIDs (git SHAs, request IDs) are identifiers,
+            // not leetspeak — their digit density is structural.
+            let is_hex_identifier = chars.iter().any(|c| c.is_ascii_digit())
+                && chars.iter().all(|c| c.is_ascii_hexdigit() || *c == '-');
+
+            if !is_hex_identifier
+                && alpha_count >= config.leet_min_alpha
                 && true_alpha >= 2
                 && leet_count * 100 / alpha_count.max(1) >= config.leet_min_pct
             {
@@ -3737,6 +3780,18 @@ fn pass_entropy_bigram(text: &mut String, detections: &mut Vec<Detection>, confi
         let chars: Vec<char> = token.chars().collect();
         let n = chars.len();
         if n < ENTROPY_TOKEN_LEN {
+            continue;
+        }
+
+        // Hex identifiers (git SHAs, UUIDs) and shell/path fragments are
+        // structural, not encoded payloads — their bigram coverage is
+        // legitimately low.
+        let is_hex_identifier = chars.iter().any(|c| c.is_ascii_digit())
+            && chars.iter().all(|c| c.is_ascii_hexdigit() || *c == '-');
+        let is_code_shaped = chars
+            .iter()
+            .any(|c| matches!(c, '$' | '(' | ')' | '{' | '}' | ':' | '\\' | '/'));
+        if is_hex_identifier || is_code_shaped {
             continue;
         }
 
@@ -3837,6 +3892,7 @@ fn pass_split_string(text: &mut String, detections: &mut Vec<Detection>) {
     }
 
     let lower_text = text.to_lowercase();
+    let skeleton_str: String = skeleton.iter().map(|&(c, _)| c).collect();
 
     for &keyword in &alpha_keywords {
         if keyword.len() > skeleton.len() {
@@ -3847,55 +3903,45 @@ fn pass_split_string(text: &mut String, detections: &mut Vec<Detection>) {
             continue;
         }
 
-        // Greedy subsequence match against the skeleton.
-        let kw_chars: Vec<char> = keyword.chars().collect();
-        let mut matched_positions: Vec<usize> = Vec::new();
-        let mut skeleton_idx = 0;
-        let mut found = true;
-
-        for &kc in &kw_chars {
-            let mut found_char = false;
-            while skeleton_idx < skeleton.len() {
-                if skeleton[skeleton_idx].0 == kc {
-                    matched_positions.push(skeleton[skeleton_idx].1);
-                    skeleton_idx += 1;
-                    found_char = true;
-                    break;
-                }
-                skeleton_idx += 1;
-            }
-            if !found_char {
-                found = false;
+        // The keyword must be CONTIGUOUS in the alpha skeleton ("ig.no.re" →
+        // skeleton "ignore"). A subsequence match with arbitrary gaps flags
+        // nearly every English sentence, since keyword letters scattered
+        // across ordinary words always exist in order somewhere.
+        let mut search_from = 0usize;
+        let mut fired = false;
+        while !fired {
+            let Some(rel) = skeleton_str[search_from..].find(keyword) else {
                 break;
+            };
+            let start = search_from + rel;
+            let matched = &skeleton[start..start + keyword.len()];
+            search_from = start + 1;
+
+            // Count segments: matched skeleton chars are all ASCII (1 byte),
+            // so a byte-position gap > 1 means a separator sits between them.
+            let mut segment_count = 1usize;
+            for i in 1..matched.len() {
+                if matched[i].1 > matched[i - 1].1 + 1 {
+                    segment_count += 1;
+                }
             }
-        }
-
-        if !found {
-            continue;
-        }
-
-        // Count segments: consecutive matched positions with gap > 1 mean a separator exists.
-        let mut segment_count = 1usize;
-        for i in 1..matched_positions.len() {
-            if matched_positions[i] > matched_positions[i - 1] + 1 {
-                segment_count += 1;
+            if segment_count < 2 {
+                continue; // contiguous in the raw text too — not a split attack
             }
+
+            let confidence = if segment_count >= 3 { 1.0f32 } else { 0.5f32 };
+
+            detections.push(Detection {
+                kind: PassKind::SplitString,
+                original: text.clone(),
+                normalized: text.clone(),
+                detail: format!(
+                    "keyword {:?} reconstructed from {} segments (confidence {:.1})",
+                    keyword, segment_count, confidence
+                ),
+            });
+            fired = true;
         }
-        if segment_count < 2 {
-            continue;
-        } // contiguous — confidence 0.0, skip
-
-        let confidence = if segment_count >= 3 { 1.0f32 } else { 0.5f32 };
-
-        detections.push(Detection {
-            kind: PassKind::SplitString,
-            original: text.clone(),
-            normalized: text.clone(),
-            detail: format!(
-                "keyword {:?} reconstructed from {} segments (confidence {:.1})",
-                keyword, segment_count, confidence
-            ),
-        });
     }
 }
 
@@ -4151,9 +4197,13 @@ fn pass_rot13(text: &mut String, detections: &mut Vec<Detection>) {
 
     let decoded = decoded_parts.join("");
     let decoded_lower = decoded.to_lowercase();
+    let original_lower = original.to_lowercase();
+    // The keyword must APPEAR because of decoding — a keyword already present
+    // verbatim in the original (plain English "system", "instructions") is
+    // not evidence of rot13.
     if !INJECTION_KEYWORDS
         .iter()
-        .any(|kw| decoded_lower.contains(kw))
+        .any(|kw| decoded_lower.contains(kw) && !original_lower.contains(kw))
     {
         return;
     }
