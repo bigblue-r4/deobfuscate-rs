@@ -13,9 +13,9 @@
 | License | MIT |
 | crates.io | https://crates.io/crates/deobfuscate |
 | GitHub | https://github.com/bigblue-r4/deobfuscate-rs |
-| Current version | **v1.13.0** |
-| Test count | **110 unit tests + 2 doc tests** — all green |
-| Source file | Single file: `src/lib.rs` (~4,800 lines) + `src/wasm.rs` |
+| Current version | **v1.14.0** |
+| Test count | **114 unit + 13 integration + 2 doc tests** — all green |
+| Source file | Single file: `src/lib.rs` (~5,800 lines) + `src/wasm.rs` |
 
 ---
 
@@ -51,10 +51,11 @@ community.
 | v1.11.0 | 2026-06-25 | Punycode pass — IDN xn-- label decode via RFC 3492 | +6 → 98 |
 | v1.12.0 | 2026-06-26 | Per-token confidence scores — blended base + structural confidence | +6 → 104 |
 | v1.13.0 | 2026-06-26 | HMAC-SHA256 signing for tamper-evident AuditRecord chains | +6 → 110 |
+| v1.14.0 | 2026-06-30 | SkeletonMatch pass — TR39 skeleton algorithm for cross-script confusables beyond the static table | +4 → 114 |
 
 ---
 
-## All 18 Passes — Current Status
+## All 19 Passes — Current Status
 
 ### Pipeline order (top = runs first)
 
@@ -66,20 +67,22 @@ community.
 | 4 | `BiDiControl` | ✅ Complete | 0.90 | RTL/LTR override + zero-width chars |
 | 5 | `FullwidthChars` | ✅ Complete | 0.65 | U+FF01–FF5E fullwidth ASCII → ASCII |
 | 6 | `BackslashEscape` | ✅ Complete | 0.80 | `\X` per-char prefix escaping (≥3 backslashes) |
-| 7 | `UrlEncoding` | ✅ Complete | 0.80 | Percent-encoded runs ≥3 + keyword check |
-| 8 | `HtmlEntities` | ✅ Complete | 0.80 | Decimal/hex/named entities ≥4 + keyword check |
-| 9 | `Base64` | ✅ Complete | 0.85 | Explicit `b64.decode()` + bare blobs ≥12 chars |
-| 10 | `MorseCode` | ✅ Complete | 0.80 | ITU Morse ≥10 chars, ≥60% Morse, ≥40% letter decode |
-| 11 | `Homoglyph` | ✅ Complete | 0.55 | 1,631-entry TR39: Cyrillic, Greek, Hebrew, Arabic, Math |
-| 12 | `ScriptIntrusion` | ✅ Complete | 0.40 | Non-Latin mid-word embedding (detection only) |
-| 13 | `Leetspeak` | ✅ Complete | 0.30 | ≥35% leet substitution + ≥2 alpha chars |
-| 14 | `EntropyBigram` | ✅ Complete | 0.50 | Shannon entropy >5.2 OR English bigram <0.15 |
-| 15 | `SplitString` | ✅ Complete | 0.70 | Keyword fragmentation via alpha skeleton (detection only) |
-| 16 | `Rot13` | ✅ Complete | 0.80 | Caesar-13 in all-alpha tokens ≥ 4 chars containing injection keyword |
-| 17 | `Punycode` | ✅ Complete | 0.85 | IDN `xn--` label decode via RFC 3492, keyword check after confusable norm |
-| 18 | `Confidence` | ✅ Complete | n/a | Per-detection blended base + structural confidence score in [0.0, 1.0] |
+| 7 | `UnicodeEscape` | ✅ Complete | 0.80 | `\xNN`, `\uNNNN`, `\u{N}`, octal char escapes decoded |
+| 8 | `UrlEncoding` | ✅ Complete | 0.80 | Percent-encoded runs ≥3 + keyword check |
+| 9 | `HtmlEntities` | ✅ Complete | 0.80 | Decimal/hex/named entities ≥4 + keyword check |
+| 10 | `Base64` | ✅ Complete | 0.85 | Explicit `b64.decode()` + bare blobs ≥12 chars |
+| 11 | `MorseCode` | ✅ Complete | 0.80 | ITU Morse ≥10 chars, ≥60% Morse, ≥40% letter decode |
+| 12 | `Homoglyph` | ✅ Complete | 0.55 | 1,631-entry TR39: Cyrillic, Greek, Hebrew, Arabic, Math |
+| 13 | `ScriptIntrusion` | ✅ Complete | 0.40 | Non-Latin mid-word embedding (detection only) |
+| 14 | `Leetspeak` | ✅ Complete | 0.30 | ≥35% leet substitution + ≥2 alpha chars |
+| 15 | `EntropyBigram` | ✅ Complete | 0.50 | Shannon entropy >5.2 OR English bigram <0.15 |
+| 16 | `SplitString` | ✅ Complete | 0.70 | Keyword fragmentation via alpha skeleton (detection only) |
+| 17 | `Rot13` | ✅ Complete | 0.80 | Caesar-13 in all-alpha tokens ≥ 4 chars containing injection keyword |
+| 18 | `Punycode` | ✅ Complete | 0.85 | IDN `xn--` label decode via RFC 3492, keyword check after confusable norm |
+| 19 | `SkeletonMatch` | ✅ Complete | 0.75 | TR39 skeleton algorithm — confusables beyond the 1,631-entry static table |
 
-All 18 passes are implemented and active.
+All 19 passes are implemented and active. Per-detection blended confidence
+scores (v1.12.0) are attached to every detection — not a pass, a scoring layer.
 
 ### Audit feature
 
@@ -98,16 +101,21 @@ All 18 passes are implemented and active.
 
 ```
 src/
-  lib.rs        — all 15 passes, Config, Normalizer, types, 65 unit tests
+  lib.rs        — all 19 passes, Config, Normalizer, audit, types, 114 unit tests
   wasm.rs       — wasm-bindgen JS API (analyze_text, should_block, score)
+tests/
+  integration.rs — 13 end-to-end tests (TOML config, audit JSONL, HMAC chains)
+benches/
+  deobfuscate_bench.rs — criterion benchmarks
 wasm/
   README.md     — wasm-pack build instructions + JS/TS API docs
   example.html  — self-contained browser demo
 examples/
-  config.toml   — annotated TOML reference for all 28 Config fields
+  config.toml   — annotated TOML reference for all 32 Config fields
 .github/
   workflows/
     ci.yml      — CI: cargo test, wasm32 check, clippy
+    release.yml — on v* tag: check gate → cargo publish + WASM build → GitHub release
 ```
 
 ### Key types
@@ -149,7 +157,8 @@ Config::from_file(path: &Path)          // file, fallback to default (non-wasm32
 ### WASM API (wasm feature)
 
 ```bash
-wasm-pack build --target web --features wasm --no-default-features
+# wasm-pack's own flags before `--`; cargo flags after
+wasm-pack build --target web --out-dir pkg -- --features wasm --no-default-features
 ```
 
 ```js
@@ -160,7 +169,7 @@ const result = analyze_text(input);
 
 ---
 
-## Config — All 28 Configurable Fields
+## Config — All 32 Configurable Fields
 
 | Field | Default | What it controls |
 |-------|---------|-----------------|
@@ -192,6 +201,10 @@ const result = analyze_text(input);
 | `weight_script` | 0.40 | Score weight for ScriptIntrusion |
 | `weight_nfc` | 0.35 | Score weight for PreScanNfc |
 | `weight_leet` | 0.30 | Score weight for Leetspeak |
+| `weight_unicode_escape` | 0.80 | Score weight for UnicodeEscape |
+| `weight_rot13` | 0.80 | Score weight for Rot13 |
+| `weight_punycode` | 0.85 | Score weight for Punycode |
+| `weight_skeleton_match` | 0.75 | Score weight for SkeletonMatch |
 
 ---
 
@@ -235,7 +248,6 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 | Audit detail strings may embed decoded snippets | By design | Truncated to 200 chars in DetectionRecord; raw input never stored |
 | `SplitString` detection-only (does not normalize text) | By design | Keyword fragments can't be safely removed without semantic context |
 | Semantic attacks (DAN jailbreaks, roleplay framing) | Out of scope | Require LLM-level reasoning; handled by Stage 1 in split-brain-harness |
-| No `no_std` support | Open | Would need to drop filesystem deps and embed base64 decoder |
 
 ---
 
@@ -248,6 +260,12 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 | Test (stable) | `cargo test --all-features` + `cargo test --no-default-features` | Added v1.7.0; no-default-features fixed v1.13.0 |
 | WASM check | `cargo check --target wasm32-unknown-unknown --features wasm --no-default-features` | Added v1.7.0 |
 | Clippy | `cargo clippy --all-features -- -D warnings` | Added v1.7.0 |
+
+`.github/workflows/release.yml` — on `v*` tag push: check gate (tests + clippy)
+→ `cargo publish` + wasm-pack build → GitHub release with WASM artifacts and
+CHANGELOG-extracted notes. Fixed 2026-07-01: `CARGO_REGISTRY_TOKEN` secret set
+on the repo, wasm-pack arg ordering corrected (v1.14.0 had to be released
+manually because of both). First automated end-to-end run will be the next tag.
 
 ---
 
@@ -264,7 +282,14 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 
 ## Next Session Starting Points
 
-1. **Release automation** — `.github/workflows/release.yml`: on `v*` tag push, cargo publish + build WASM + create GitHub release from CHANGELOG entry.
-2. **Integration tests** — `tests/integration.rs`: end-to-end TOML config load → analyze → audit JSON output; HMAC sign → verify chain.
-3. **Benchmark suite** — `benches/deobfuscate_bench.rs` using criterion against the CyberEC dataset.
-4. **`no_std` mode** — drop filesystem deps, embed base64 decoder for embedded targets.
+1. **Fuzzing** — `cargo-fuzz` targets on `analyze()`; the pipeline decodes many
+   formats (base64, punycode, escapes, entities) where malformed-input panics
+   would matter. Add a CI fuzz smoke job.
+2. **Adversarial detection-rate benchmark** — corpus-level eval (adversarial +
+   benign samples) reporting detection rate and false-positive rate; publish
+   the numbers in the README.
+3. **npm publish** — wasm-pack output in `pkg/` is publish-ready; add gated npm
+   publish step to release workflow (needs `NPM_TOKEN` secret).
+4. **Module split** — `src/lib.rs` is ~5,800 lines; split into `passes/`,
+   `config.rs`, `audit.rs`, `scoring.rs` with no public API change.
+5. **`no_std` mode** — drop filesystem deps, embed base64 decoder for embedded targets.
