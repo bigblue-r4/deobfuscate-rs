@@ -13,9 +13,9 @@
 | License | MIT |
 | crates.io | https://crates.io/crates/deobfuscate |
 | GitHub | https://github.com/bigblue-r4/deobfuscate-rs |
-| Current version | **v1.14.0** |
-| Test count | **114 unit + 13 integration + 2 doc tests** — all green |
-| Source file | Single file: `src/lib.rs` (~5,800 lines) + `src/wasm.rs` |
+| Current version | **v1.15.0** |
+| Test count | **115 unit + 13 integration + 2 corpus-gate + 2 doc tests** — all green |
+| Source layout | Modules: `types`, `audit`, `config`, `tables`, `passes`, `normalizer`, `tests` (split from single-file lib.rs in v1.15.0) |
 
 ---
 
@@ -52,6 +52,7 @@ community.
 | v1.12.0 | 2026-06-26 | Per-token confidence scores — blended base + structural confidence | +6 → 104 |
 | v1.13.0 | 2026-06-26 | HMAC-SHA256 signing for tamper-evident AuditRecord chains | +6 → 110 |
 | v1.14.0 | 2026-06-30 | SkeletonMatch pass — TR39 skeleton algorithm for cross-script confusables beyond the static table | +4 → 114 |
+| v1.15.0 | 2026-07-01 | Corpus benchmark (100% det / 0 FP, CI-enforced), cargo-fuzz + CI smoke, 7 FP fixes (SplitString subsequence bug, CJK punct, Rot13 verbatim, bigram table, leet/entropy hex skip, homoglyph token shape), UTF-8 truncation panic fix, module split | +1 → 115 |
 
 ---
 
@@ -101,21 +102,33 @@ scores (v1.12.0) are attached to every detection — not a pass, a scoring layer
 
 ```
 src/
-  lib.rs        — all 19 passes, Config, Normalizer, audit, types, 114 unit tests
+  lib.rs        — crate docs, module declarations, public re-exports (~70 lines)
+  types.rs      — PassKind, Detection, NormalizationResult
+  audit.rs      — AuditRecord, DetectionRecord, timestamps, HMAC chains
+  config.rs     — Config struct + serde defaults (32 fields)
+  tables.rs     — HOMOGLYPHS (1,631), LEET_MAP, Morse, bigrams, keywords
+  passes.rs     — all 19 pass implementations
+  normalizer.rs — Normalizer builder, pipeline, compute_score, analyze()
+  tests.rs      — 115 unit tests
   wasm.rs       — wasm-bindgen JS API (analyze_text, should_block, score)
 tests/
   integration.rs — 13 end-to-end tests (TOML config, audit JSONL, HMAC chains)
+  corpus_eval.rs — CI gate: 100% detection / 0 FP on the corpora
+  corpus/        — adversarial.jsonl (24 attacks), benign.jsonl (21 hard cases)
+fuzz/
+  fuzz_targets/  — analyze (invariants), config_toml (TOML round-trip)
 benches/
   deobfuscate_bench.rs — criterion benchmarks
+examples/
+  corpus_eval.rs — prints per-category detection/block/FP breakdown
+  config.toml    — annotated TOML reference for all 32 Config fields
 wasm/
   README.md     — wasm-pack build instructions + JS/TS API docs
   example.html  — self-contained browser demo
-examples/
-  config.toml   — annotated TOML reference for all 32 Config fields
 .github/
   workflows/
-    ci.yml      — CI: cargo test, wasm32 check, clippy
-    release.yml — on v* tag: check gate → cargo publish + WASM build → GitHub release
+    ci.yml      — CI: cargo test ×2 feature sets, wasm32 check, clippy, fuzz smoke
+    release.yml — on v* tag: check gate → cargo publish + WASM build → npm publish (gated on NPM_TOKEN) → GitHub release
 ```
 
 ### Key types

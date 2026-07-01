@@ -6,6 +6,9 @@ All notable changes to `deobfuscate` are documented here.
 
 ## [1.15.0] — 2026-07-01
 
+### Changed
+- `src/lib.rs` (5,900 lines) split into focused modules: `types`, `audit`, `config`, `tables`, `passes`, `normalizer`, `tests`. No public API change — `lib.rs` re-exports the same eight items
+
 ### Added
 - Adversarial corpus benchmark — `tests/corpus/{adversarial,benign}.jsonl` (24 attack samples across all 19 pass categories, 21 benign hard cases: git SHAs, UUIDs, shell commands, Japanese/French/German prose, math notation, emoji). `cargo run --example corpus_eval` prints the per-category breakdown; `tests/corpus_eval.rs` enforces 100% detection / 0 false positives in CI
 - `cargo-fuzz` harness — `fuzz/` with two targets: `analyze` (scoring invariants) and `config_toml` (TOML round-trip); 60s-per-target smoke job added to CI
