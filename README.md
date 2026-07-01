@@ -262,8 +262,12 @@ See [`examples/audit.rs`](examples/audit.rs) for a runnable demo.
 The `wasm` feature exposes a thin JS-callable API for in-browser use.
 
 ```bash
-wasm-pack build --target web --features wasm --no-default-features
+wasm-pack build --target web --out-dir pkg --scope bigblue-r4 -- --features wasm --no-default-features
 ```
+
+The release workflow publishes the package as
+[`@bigblue-r4/deobfuscate`](https://www.npmjs.com/package/@bigblue-r4/deobfuscate)
+on npm (the bare name was taken).
 
 ```js
 import init, { analyze_text, should_block, score } from './pkg/deobfuscate.js';

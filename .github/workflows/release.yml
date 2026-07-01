@@ -44,13 +44,37 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Build WASM package
         # wasm-pack's own flags must come before the `--` separator; everything
-        # after it is forwarded to cargo
-        run: wasm-pack build --target web --out-dir pkg -- --features wasm --no-default-features
+        # after it is forwarded to cargo. Scoped because the bare npm name
+        # "deobfuscate" is taken.
+        run: wasm-pack build --target web --out-dir pkg --scope bigblue-r4 -- --features wasm --no-default-features
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wasm-pkg
           path: pkg/
+
+  publish-npm:
+    name: Publish to npm
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: pkg/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Publish @bigblue-r4/deobfuscate (skipped when NPM_TOKEN is not set)
+        if: env.NPM_TOKEN != ''
+        working-directory: pkg
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ env.NPM_TOKEN }}
 
   create-release:
     name: Create GitHub Release

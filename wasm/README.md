@@ -13,7 +13,7 @@ rustup target add wasm32-unknown-unknown
 
 ```bash
 # From the repo root:
-wasm-pack build --target web --features wasm --no-default-features
+wasm-pack build --target web --out-dir pkg --scope bigblue-r4 -- --features wasm --no-default-features
 
 # Output: pkg/deobfuscate.js  pkg/deobfuscate_bg.wasm  pkg/deobfuscate.d.ts
 ```
