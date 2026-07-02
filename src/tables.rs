@@ -25,11 +25,11 @@ pub(crate) const ENGLISH_BIGRAMS: &[&str] = &[
 ];
 
 /// Variation Selectors block (VS1–VS16).
-pub(crate) const VS_RANGE_A: std::ops::RangeInclusive<u32> = 0xFE00..=0xFE0F;
+pub(crate) const VS_RANGE_A: core::ops::RangeInclusive<u32> = 0xFE00..=0xFE0F;
 /// Variation Selectors Supplement (VS17–VS256).
-pub(crate) const VS_RANGE_B: std::ops::RangeInclusive<u32> = 0xE0100..=0xE01EF;
+pub(crate) const VS_RANGE_B: core::ops::RangeInclusive<u32> = 0xE0100..=0xE01EF;
 /// Unicode Tags block — language tag characters with no legitimate LLM use.
-pub(crate) const TAG_BLOCK: std::ops::RangeInclusive<u32> = 0xE0000..=0xE007F;
+pub(crate) const TAG_BLOCK: core::ops::RangeInclusive<u32> = 0xE0000..=0xE007F;
 
 pub(crate) const BIDI_CONTROLS: &[char] = &[
     '\u{202E}', // RIGHT-TO-LEFT OVERRIDE

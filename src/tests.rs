@@ -1585,6 +1585,7 @@ fn audit_detail_truncation_respects_char_boundaries() {
 // ── SkeletonMatch pass ────────────────────────────────────────────────────
 
 #[test]
+#[cfg(feature = "std")]
 fn skeleton_match_cyrillic_ignore() {
     // Run skeleton_match without homoglyph pass — proving the TR39 layer works independently.
     // 'і' (U+0456) and 'ο' (U+03BF) are in our HOMOGLYPHS table; in the full pipeline they
@@ -1602,6 +1603,7 @@ fn skeleton_match_cyrillic_ignore() {
 }
 
 #[test]
+#[cfg(feature = "std")]
 fn skeleton_match_fraktur_exec() {
     // Mathematical Fraktur 'e','x','c' (U+1D522,U+1D535,U+1D520) are in our HOMOGLYPHS table
     // but skeleton_match provides a second independent layer. Run it alone to prove coverage.

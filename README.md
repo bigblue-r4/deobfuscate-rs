@@ -272,6 +272,38 @@ See [`examples/audit.rs`](examples/audit.rs) for a runnable demo.
 
 ---
 
+## no_std / minimal profile
+
+For embedded and edge deployment the core detection passes compile without
+`std` — only `alloc` is required:
+
+```toml
+[dependencies]
+deobfuscate = { version = "1", default-features = false }
+```
+
+What the minimal profile contains: 18 of the 19 passes, scoring, thresholds,
+and the builder API. What it drops:
+
+| Dropped without `std` | Why |
+|-----------------------|-----|
+| `SkeletonMatch` pass | the `unicode_skeleton` crate is std-only |
+| Audit trail (`audit` feature) | timestamps + JSONL file IO |
+| TOML config loading (`serde` feature) | the `toml` crate is std-only; `Config` struct literals still work |
+
+On bare-metal targets (`target_os = "none"`, e.g. `thumbv7em-none-eabi`) the
+crate builds as `#![no_std]`; on hosted targets the same feature set simply
+compiles a smaller library. Float math routes through the pure-Rust
+[`libm`](https://crates.io/crates/libm) crate in every profile, so entropy
+scores are bit-identical across std, no_std, and WASM builds.
+
+Size delta (release `.rlib` including metadata, Rust stable, x86_64 unless
+noted): default features **1.69 MB** → minimal **841 KB**; minimal on
+`thumbv7em-none-eabi` **688 KB**. A no_std build is checked in CI on every
+push so it can't silently regress.
+
+---
+
 ## WebAssembly
 
 The `wasm` feature exposes a thin JS-callable API for in-browser use.
@@ -360,10 +392,6 @@ This library applies three layers:
    input containing non-ASCII characters.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full history.
-
-## Roadmap
-
-- `no_std` mode (drop filesystem deps, embed decoder)
 
 ---
 

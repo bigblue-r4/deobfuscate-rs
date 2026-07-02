@@ -2,12 +2,19 @@
 
 #[cfg(feature = "audit")]
 use crate::audit::AuditRecord;
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Which deobfuscation pass fired.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+///
+/// New variants may be added in minor releases as passes ship — downstream
+/// `match` expressions should include a `_` arm. The derived `Ord` follows
+/// declaration order and carries no semantic meaning.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PassKind {
     /// Invisible BiDi / zero-width control characters stripped.
     BiDiControl,
@@ -54,8 +61,8 @@ pub enum PassKind {
     SkeletonMatch,
 }
 
-impl std::fmt::Display for PassKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for PassKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(match self {
             PassKind::BiDiControl => "bidi-control",
             PassKind::FullwidthChars => "fullwidth-chars",
@@ -132,7 +139,7 @@ impl Detection {
         let orig = self.original.chars().count();
         let norm = self.normalized.chars().count();
         let change_ratio = if orig > 0 {
-            ((orig as f32 - norm as f32).abs() / orig as f32).min(1.0)
+            (crate::math::abs(orig as f32 - norm as f32) / orig as f32).min(1.0)
         } else {
             0.0
         };
@@ -178,12 +185,13 @@ impl NormalizationResult {
 
     /// Returns the unique detection kinds found, deduplicated.
     pub fn detection_kinds(&self) -> Vec<PassKind> {
-        let mut seen = std::collections::HashSet::new();
-        self.detections
-            .iter()
-            .filter(|d| seen.insert(d.kind.clone()))
-            .map(|d| d.kind.clone())
-            .collect()
+        let mut kinds: Vec<PassKind> = Vec::new();
+        for d in &self.detections {
+            if !kinds.contains(&d.kind) {
+                kinds.push(d.kind.clone());
+            }
+        }
+        kinds
     }
 
     /// Serialize the audit record as a single JSONL line (feature = "audit" + "serde").

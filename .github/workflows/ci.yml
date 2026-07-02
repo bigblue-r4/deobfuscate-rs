@@ -72,6 +72,20 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --all-features -- -D warnings
 
+  nostd:
+    name: Check — no_std (thumbv7em-none-eabi)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install stable toolchain + thumbv7em target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabi
+
+      - name: cargo check (no_std + alloc, core passes only)
+        run: cargo check --target thumbv7em-none-eabi --no-default-features
+
   semver:
     name: Semver — no accidental breaking changes
     runs-on: ubuntu-latest

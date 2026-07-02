@@ -3,8 +3,12 @@
 use crate::config::Config;
 use crate::tables::*;
 use crate::types::{Detection, PassKind};
+use alloc::collections::BTreeMap;
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-use std::collections::HashMap;
 use unicode_normalization::UnicodeNormalization as _;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -97,7 +101,7 @@ pub(crate) fn pass_cjk_superposition(
         for &f in &freq {
             if f > 0 {
                 let p = f as f32 / config.cjk_super_window as f32;
-                h -= p * p.ln();
+                h -= p * crate::math::ln(p);
             }
         }
         if !fired && h > config.cjk_super_threshold {
@@ -546,7 +550,7 @@ pub(crate) fn is_morse_char(c: char) -> bool {
 }
 
 pub(crate) fn decode_morse_str(morse: &str) -> Option<String> {
-    let lookup: HashMap<&str, char> = MORSE_TABLE.iter().map(|(c, p)| (*p, *c)).collect();
+    let lookup: BTreeMap<&str, char> = MORSE_TABLE.iter().map(|(c, p)| (*p, *c)).collect();
     let words: Vec<&str> = morse.split(" / ").collect();
     let mut result = String::new();
     let mut total = 0usize;
@@ -658,7 +662,7 @@ pub(crate) fn pass_homoglyphs(
     detections: &mut Vec<Detection>,
     detect_script_intrusion: bool,
 ) -> f32 {
-    let table: HashMap<char, char> = HOMOGLYPHS.iter().copied().collect();
+    let table: BTreeMap<char, char> = HOMOGLYPHS.iter().copied().collect();
     let chars_before: Vec<char> = text.chars().collect();
     let mut replacements: Vec<(char, char, usize)> = Vec::new();
 
@@ -783,6 +787,7 @@ pub(crate) fn has_script_intrusions(chars: &[char]) -> bool {
 // SkeletonMatch pass — TR39 skeleton algorithm (unicode_skeleton crate)
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[cfg(feature = "std")]
 pub(crate) fn pass_skeleton_match(text: &mut String, detections: &mut Vec<Detection>) {
     use unicode_skeleton::UnicodeSkeleton;
 
@@ -813,7 +818,7 @@ pub(crate) fn pass_skeleton_match(text: &mut String, detections: &mut Vec<Detect
         .filter(|c| {
             !c.is_ascii() && unicode_security::is_potential_mixed_script_confusable_char(*c)
         })
-        .collect::<std::collections::HashSet<_>>()
+        .collect::<alloc::collections::BTreeSet<_>>()
         .into_iter()
         .collect();
 
@@ -849,7 +854,7 @@ pub(crate) fn pass_leet(
     detections: &mut Vec<Detection>,
     config: &Config,
 ) -> f32 {
-    let leet: HashMap<char, char> = LEET_MAP.iter().copied().collect();
+    let leet: BTreeMap<char, char> = LEET_MAP.iter().copied().collect();
     let mut total_chars = 0usize;
     let mut total_leet = 0usize;
     let mut changed = false;
@@ -958,7 +963,7 @@ pub(crate) fn pass_entropy_bigram(
         }
 
         // Sub-check A: Shannon entropy
-        let mut freq: HashMap<char, u32> = HashMap::new();
+        let mut freq: BTreeMap<char, u32> = BTreeMap::new();
         for &c in &chars {
             *freq.entry(c).or_insert(0) += 1;
         }
@@ -966,7 +971,7 @@ pub(crate) fn pass_entropy_bigram(
             .values()
             .map(|&f| {
                 let p = f as f32 / n as f32;
-                -p * p.log2()
+                -p * crate::math::log2(p)
             })
             .sum();
 

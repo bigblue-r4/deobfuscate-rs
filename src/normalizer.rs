@@ -5,6 +5,11 @@ use crate::audit::build_audit_record;
 use crate::config::Config;
 use crate::passes::*;
 use crate::types::{Detection, NormalizationResult, PassKind};
+use alloc::collections::BTreeSet;
+#[cfg(feature = "audit")]
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Normalizer (builder)
@@ -31,7 +36,7 @@ use crate::types::{Detection, NormalizationResult, PassKind};
 /// ```
 #[derive(Debug, Clone)]
 pub struct Normalizer {
-    enabled: std::collections::HashSet<PassKind>,
+    enabled: BTreeSet<PassKind>,
     config: Config,
 }
 
@@ -39,7 +44,7 @@ impl Normalizer {
     /// Empty normalizer — no passes enabled. Use [`enable`][Self::enable] to add passes.
     pub fn new() -> Self {
         Self {
-            enabled: std::collections::HashSet::new(),
+            enabled: BTreeSet::new(),
             config: Config::default(),
         }
     }
@@ -165,6 +170,8 @@ impl Normalizer {
         if self.has(&PassKind::SplitString) {
             pass_split_string(&mut text, &mut detections);
         }
+        // SkeletonMatch requires the std-only unicode_skeleton crate.
+        #[cfg(feature = "std")]
         if self.has(&PassKind::SkeletonMatch) {
             pass_skeleton_match(&mut text, &mut detections);
         }

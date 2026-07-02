@@ -50,8 +50,17 @@
 //!
 //! Thresholds: `score >= 0.25` → flag for review; `score >= 0.60` → block / stop-and-ask.
 
+// no_std only on bare-metal targets: hosted targets must keep std linked even
+// with default-features off, because the cdylib crate-type (built for
+// dependencies too) needs std's allocator and panic handler to link there.
+// The CI thumbv7em check keeps the not(std) code paths honest.
+#![cfg_attr(all(not(feature = "std"), target_os = "none"), no_std)]
+
+extern crate alloc;
+
 mod audit;
 mod config;
+mod math;
 mod normalizer;
 mod passes;
 mod tables;

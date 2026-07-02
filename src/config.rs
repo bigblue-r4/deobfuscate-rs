@@ -1,5 +1,9 @@
 //! Runtime-configurable thresholds and pass weights.
 
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Config — runtime-configurable thresholds and weights
 // ─────────────────────────────────────────────────────────────────────────────
