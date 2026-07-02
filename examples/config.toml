@@ -47,3 +47,8 @@ leet_min_pct = 60
 # Only used when a SemanticScorer is installed via with_semantic_scorer().
 # semantic_threshold = 0.50   # scorer output at/above this records a detection
 # weight_semantic    = 0.60   # score weight for semantic-anomaly detections
+
+# ── Audit trail (feature = "audit") ──────────────────────────────────────────
+# Redaction for DetectionRecord.detail — the only audit field that can embed
+# decoded snippets. "none" (default) | "hash" (sha256 of content) | "elide".
+# audit_redaction = "hash"

@@ -28,6 +28,9 @@ wasm    = ["std", "dep:wasm-bindgen", "dep:js-sys"]
 # semantic: opt-in SemanticScorer trait hook + PhraseOverrideScorer reference
 # implementation. No dependencies; zero cost when disabled.
 semantic = []
+# otel: OpenTelemetry span/event export per analysis (API crate only — bring
+# your own SDK/exporter). Heavy-ish dep, strictly opt-in.
+otel = ["std", "dep:opentelemetry"]
 
 [dependencies]
 base64                = { version = "0.22", default-features = false, features = ["alloc"] }
@@ -42,6 +45,7 @@ hmac         = { version = "0.12", optional = true }
 serde_json   = { version = "1", default-features = false, features = ["alloc"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys       = { version = "0.3", optional = true }
+opentelemetry = { version = "0.32", default-features = false, features = ["trace"], optional = true }
 
 [[example]]
 name = "audit"

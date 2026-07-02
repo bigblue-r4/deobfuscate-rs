@@ -182,6 +182,27 @@ pub(crate) fn serde_weight_semantic() -> f32 {
     DEFAULT_WEIGHT_SEMANTIC
 }
 
+/// How the free-text `detail` field is recorded in audit-trail
+/// [`DetectionRecord`](crate::DetectionRecord)s (feature = "audit").
+///
+/// Length fields and pass names are always recorded; `detail` is the only
+/// audit field that can embed decoded payload snippets. Redaction is applied
+/// when the record is built, so the HMAC chain signs the redacted content and
+/// stays verifiable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
+pub enum AuditRedaction {
+    /// Record the detail as produced by the pass (truncated to 200 chars).
+    #[default]
+    None,
+    /// Replace the detail with `sha256:<hex>` of its content — correlatable
+    /// across records without storing content.
+    Hash,
+    /// Replace the detail with `[redacted]`.
+    Elide,
+}
+
 /// Runtime configuration for all pass thresholds and weights.
 ///
 /// Construct via [`Config::default()`] or load a partial TOML override with
@@ -314,6 +335,13 @@ pub struct Config {
     #[cfg_attr(feature = "serde", serde(default = "serde_weight_semantic"))]
     pub weight_semantic: f32,
 
+    // ── Audit trail (feature = "audit"; field always present so TOML configs
+    //    stay portable across feature sets) ──────────────────────────────────
+    /// Redaction applied to `DetectionRecord.detail`: `"none"`, `"hash"`, or
+    /// `"elide"`. Default `"none"`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub audit_redaction: AuditRedaction,
+
     // ── EntropyBigram vocabulary override ────────────────────────────────────
     /// Additional English bigrams merged with the built-in ~130-entry frequency
     /// table for the EntropyBigram coverage check. Each entry must be exactly two
@@ -374,6 +402,7 @@ impl Default for Config {
             weight_skeleton_match: DEFAULT_WEIGHT_SKELETON_MATCH,
             semantic_threshold: DEFAULT_SEMANTIC_THRESHOLD,
             weight_semantic: DEFAULT_WEIGHT_SEMANTIC,
+            audit_redaction: AuditRedaction::default(),
             extra_english_bigrams: Vec::new(),
             extra_cyrillic_bigrams: Vec::new(),
             extra_greek_bigrams: Vec::new(),

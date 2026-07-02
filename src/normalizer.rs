@@ -135,6 +135,7 @@ impl Normalizer {
                 true,
                 cfg.block_threshold,
                 &detections,
+                cfg.audit_redaction,
             );
             return NormalizationResult {
                 normalized: String::new(),
@@ -231,6 +232,7 @@ impl Normalizer {
             false,
             cfg.block_threshold,
             &detections,
+            cfg.audit_redaction,
         );
         NormalizationResult {
             normalized: text,

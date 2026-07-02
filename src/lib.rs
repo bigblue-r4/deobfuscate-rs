@@ -72,13 +72,16 @@ mod types;
 
 #[cfg(feature = "audit")]
 pub use audit::{AuditRecord, DetectionRecord};
-pub use config::Config;
 #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
 pub use config::ConfigError;
+pub use config::{AuditRedaction, Config};
 pub use normalizer::{analyze, Normalizer};
 #[cfg(feature = "semantic")]
 pub use semantic::{PhraseOverrideScorer, SemanticScorer};
 pub use types::{Detection, NormalizationResult, PassKind};
+
+#[cfg(feature = "otel")]
+pub mod otel;
 
 #[cfg(feature = "wasm")]
 pub mod wasm;

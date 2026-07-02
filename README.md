@@ -314,6 +314,38 @@ The signature is HMAC-SHA256 over the canonical JSON of the record with `signatu
 
 See [`examples/audit.rs`](examples/audit.rs) for a runnable demo.
 
+### Redaction
+
+`detail` is the only audit field that can embed decoded snippet fragments.
+For deployments where that must not reach the log:
+
+```toml
+audit_redaction = "hash"    # detail -> "sha256:<hex>" (correlatable, no content)
+# or "elide"                # detail -> "[redacted]"
+```
+
+Redaction is applied when the record is built, so HMAC chains sign the
+redacted content and stay verifiable. Lengths, pass names, and confidences
+are always recorded.
+
+### OpenTelemetry (feature = `otel`)
+
+The opt-in `otel` feature emits one span per analysis via the global tracer —
+score/decision attributes plus a payload-free event per detection. It depends
+only on the `opentelemetry` API crate; bring your own SDK/exporter.
+
+```rust
+let result = deobfuscate::analyze(input);
+deobfuscate::otel::emit(&result);   // span "deobfuscate.analyze"
+```
+
+### Compliance posture
+
+SHA-256 and HMAC-SHA256 (both FIPS-approved algorithms) are the only
+cryptography in the crate, isolated to the `audit` feature. See
+[SECURITY.md](SECURITY.md) for the FIPS posture, audit-chain invariants, and
+what is fuzzed/property-tested.
+
 ---
 
 ## Python

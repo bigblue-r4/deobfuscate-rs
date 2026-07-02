@@ -182,6 +182,7 @@ pub(crate) fn build_audit_record(
     halted: bool,
     block_threshold: f32,
     detections: &[Detection],
+    redaction: crate::AuditRedaction,
 ) -> AuditRecord {
     let blocked = score >= block_threshold;
     let mut seen = std::collections::HashSet::new();
@@ -202,19 +203,28 @@ pub(crate) fn build_audit_record(
             pass: d.kind.to_string(),
             original_len: d.original.chars().count(),
             normalized_len: d.normalized.chars().count(),
-            detail: {
-                let s = &d.detail;
-                if s.len() > 200 {
-                    // Byte-index truncation must land on a char boundary or
-                    // slicing panics on multi-byte UTF-8.
-                    let mut end = 200;
-                    while !s.is_char_boundary(end) {
-                        end -= 1;
+            detail: match redaction {
+                crate::AuditRedaction::None => {
+                    let s = &d.detail;
+                    if s.len() > 200 {
+                        // Byte-index truncation must land on a char boundary or
+                        // slicing panics on multi-byte UTF-8.
+                        let mut end = 200;
+                        while !s.is_char_boundary(end) {
+                            end -= 1;
+                        }
+                        format!("{}...", &s[..end])
+                    } else {
+                        s.clone()
                     }
-                    format!("{}...", &s[..end])
-                } else {
-                    s.clone()
                 }
+                crate::AuditRedaction::Hash => {
+                    use sha2::{Digest, Sha256};
+                    let mut h = Sha256::new();
+                    h.update(d.detail.as_bytes());
+                    format!("sha256:{:x}", h.finalize())
+                }
+                crate::AuditRedaction::Elide => "[redacted]".to_string(),
             },
             confidence: d.confidence(),
         })
