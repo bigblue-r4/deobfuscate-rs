@@ -4,6 +4,27 @@ All notable changes to `deobfuscate` are documented here.
 
 ---
 
+## [1.18.0] — 2026-07-01
+
+### Added
+- **no_std + minimal profile** — new default-on `std` feature; the core detection passes (18 of 19) compile under `no_std + alloc` on bare-metal targets (`target_os = "none"`). `default-features = false` is the documented minimal profile: 1.69 MB → 841 KB release rlib (688 KB on `thumbv7em-none-eabi`). CI check job prevents regression
+- **Per-script bigram tables** — `EntropyBigram` scores each token against its dominant script's table: built-in Cyrillic (Russian/Ukrainian), Greek, and Arabic tables join English; scripts without a table skip the coverage sub-check. Fixes benign Russian prose scoring 0.61 (above the default block threshold). New `extra_cyrillic_bigrams` / `extra_greek_bigrams` / `extra_arabic_bigrams` config fields; 5 non-Latin benign corpus samples
+- **Python bindings** — `pip install deobfuscate`: `scan()`, GIL-releasing `scan_batch()`, `Scanner(config_toml=..., disable=[...])`, `Report.to_dict()` for pandas. In-repo workspace member (`deobfuscate-py/`), abi3-py39 wheels for Linux/macOS/Windows built by `python-wheels.yml` on release tags (publish gated on `PYPI_API_TOKEN`)
+- **`semantic` feature** — `SemanticScorer` trait hook (plug in embeddings/perplexity/LLM judges); runs after all structural passes against the *normalized* text. New `PassKind::SemanticAnomaly`, `semantic_threshold` / `weight_semantic` config, and the dependency-free `PhraseOverrideScorer` reference implementation
+- **Audit redaction** — `audit_redaction = "none" | "hash" | "elide"`: `DetectionRecord.detail` is the only audit field that can embed decoded snippets; hash mode keeps records correlatable without content. Applied at record build so HMAC chains sign the redacted content
+- **`otel` feature** — one OpenTelemetry span per `analyze()` via the global tracer (API crate only): score/decision attributes, payload-free event per detection, error status on blocked inputs
+- **SECURITY.md** — private reporting, threat model (a documented-pass bypass is a security bug), assurance table, audit-chain invariants, FIPS posture (approved algorithms, non-validated RustCrypto implementations, documented swap path)
+- **BENCHMARKS.md** — realistic prompt-size criterion suite; headline: ~2,000 prompts/sec at 1 KiB single-threaded (~0.5 ms added latency) on a 2014 i7-4790
+- **Community infrastructure** — issue forms (bug / feature / new-pass proposal), PR checklist, CONTRIBUTING.md (semver policy, pass authoring, corpus contributions), Dependabot, BREAKING-CANDIDATES.md (v2.0 candidates), cargo-semver-checks CI job
+- `PassKind` now derives `PartialOrd`/`Ord` (declaration order; no semantic meaning)
+
+### Changed
+- Float math (`ln`/`log2`) routes through the pure-Rust `libm` crate in every profile — entropy scores are now bit-identical across std / no_std / WASM builds (previously platform-libm dependent in the last ulp)
+- Internal `HashMap`/`HashSet` → `BTreeMap`/`BTreeSet` (alloc-only); no observable behavior change
+- With `default-features = false`, the `SkeletonMatch` pass is no longer included (the `unicode_skeleton` crate is std-only); all default and `--all-features` builds are unaffected
+
+---
+
 ## [1.17.0] — 2026-07-02
 
 ### Added

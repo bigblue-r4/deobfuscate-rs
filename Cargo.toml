@@ -4,7 +4,7 @@ exclude = ["fuzz"]
 
 [package]
 name        = "deobfuscate"
-version     = "1.17.0"
+version     = "1.18.0"
 edition     = "2021"
 description = "Multi-pass text deobfuscation and encoding-evasion detector for LLM security pipelines."
 license     = "MIT"
@@ -46,6 +46,14 @@ serde_json   = { version = "1", default-features = false, features = ["alloc"], 
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys       = { version = "0.3", optional = true }
 opentelemetry = { version = "0.32", default-features = false, features = ["trace"], optional = true }
+
+# Documented 1.x semver policy (see BREAKING-CANDIDATES.md): PassKind gains
+# variants and Config gains fields in minor releases; downstream code uses a
+# `_` match arm and `..Config::default()` respectively. Everything else stays
+# at deny.
+[package.metadata.cargo-semver-checks.lints]
+enum_variant_added = "warn"
+constructible_struct_adds_field = "warn"
 
 [[example]]
 name = "audit"

@@ -42,6 +42,16 @@ pub struct Normalizer {
     semantic_scorer: Option<alloc::sync::Arc<dyn crate::SemanticScorer>>,
 }
 
+// Arc<dyn SemanticScorer> (no UnwindSafe bound on the trait, to keep scorer
+// implementations unconstrained) would silently drop these auto traits.
+// analyze() takes &self and the pipeline holds no partial state across the
+// scorer call, so a panicking scorer cannot leave the Normalizer logically
+// corrupted — this is AssertUnwindSafe, expressed at the type level.
+#[cfg(feature = "semantic")]
+impl core::panic::UnwindSafe for Normalizer {}
+#[cfg(feature = "semantic")]
+impl core::panic::RefUnwindSafe for Normalizer {}
+
 impl core::fmt::Debug for Normalizer {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut d = f.debug_struct("Normalizer");

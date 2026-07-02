@@ -13,9 +13,9 @@
 | License | MIT |
 | crates.io | https://crates.io/crates/deobfuscate |
 | GitHub | https://github.com/bigblue-r4/deobfuscate-rs |
-| Current version | **v1.15.0** |
-| Test count | **115 unit + 13 integration + 2 corpus-gate + 2 doc tests** — all green |
-| Source layout | Modules: `types`, `audit`, `config`, `tables`, `passes`, `normalizer`, `tests` (split from single-file lib.rs in v1.15.0) |
+| Current version | **v1.18.0** |
+| Test count | **148 unit + 14 integration + 2 corpus-gate + doc tests** — all green |
+| Source layout | Modules: `types`, `audit`, `config`, `tables`, `passes`, `normalizer`, `math`, `semantic`, `otel`, `tests` + `deobfuscate-py/` workspace member (PyO3) |
 
 ---
 
@@ -53,6 +53,9 @@ community.
 | v1.13.0 | 2026-06-26 | HMAC-SHA256 signing for tamper-evident AuditRecord chains | +6 → 110 |
 | v1.14.0 | 2026-06-30 | SkeletonMatch pass — TR39 skeleton algorithm for cross-script confusables beyond the static table | +4 → 114 |
 | v1.15.0 | 2026-07-01 | Corpus benchmark (100% det / 0 FP, CI-enforced), cargo-fuzz + CI smoke, 7 FP fixes (SplitString subsequence bug, CJK punct, Rot13 verbatim, bigram table, leet/entropy hex skip, homoglyph token shape), UTF-8 truncation panic fix, module split | +1 → 115 |
+| v1.16.0 | 2026-07-01 | Config::try_from_file surfaces errors; deny_unknown_fields; from_file deprecated | → 118 |
+| v1.17.0 | 2026-07-02 | Config::validate() range checks; extra_english_bigrams override; TR39 audit script | → 125 |
+| v1.18.0 | 2026-07-01 | no_std+minimal profile; per-script bigrams (Cyrillic/Greek/Arabic — fixed benign-Russian block FP); Python bindings (PyPI `deobfuscate`); `semantic` scorer hook; audit redaction; `otel` export; SECURITY.md; BENCHMARKS.md (~2k prompts/s @1KiB); community infra; semver-checks CI | → 148 |
 
 ---
 
@@ -164,9 +167,12 @@ Config::validate()                      // range-check all fields, Result<(), St
 
 | Feature | Default | What it enables |
 |---------|---------|-----------------|
-| `serde` | yes | Config TOML deserialization; `from_toml()`, `try_from_file()` |
-| `audit` | yes | `AuditRecord` + `DetectionRecord`; sha2 hash; serde_json JSONL methods |
+| `std` | yes | SkeletonMatch pass (unicode_skeleton), file IO, timestamps; off = no_std minimal profile |
+| `serde` | yes | Config TOML deserialization; `from_toml()`, `try_from_file()` (implies std) |
+| `audit` | yes | `AuditRecord` + `DetectionRecord`; sha2 hash; JSONL; `audit_redaction` config |
 | `wasm`  | no  | wasm-bindgen + js-sys; JS callable API in src/wasm.rs |
+| `semantic` | no | SemanticScorer trait hook + PhraseOverrideScorer (zero deps) |
+| `otel` | no | OpenTelemetry span per analyze() (API crate only) |
 
 ### WASM API (wasm feature)
 
@@ -296,14 +302,15 @@ manually because of both). First automated end-to-end run will be the next tag.
 
 ## Next Session Starting Points
 
-1. **Fuzzing** — `cargo-fuzz` targets on `analyze()`; the pipeline decodes many
-   formats (base64, punycode, escapes, entities) where malformed-input panics
-   would matter. Add a CI fuzz smoke job.
-2. **Adversarial detection-rate benchmark** — corpus-level eval (adversarial +
-   benign samples) reporting detection rate and false-positive rate; publish
-   the numbers in the README.
-3. **npm publish** — wasm-pack output in `pkg/` is publish-ready; add gated npm
-   publish step to release workflow (needs `NPM_TOKEN` secret).
-4. **Module split** — `src/lib.rs` is ~5,800 lines; split into `passes/`,
-   `config.rs`, `audit.rs`, `scoring.rs` with no public API change.
-5. **`no_std` mode** — drop filesystem deps, embed base64 decoder for embedded targets.
+1. **Tag v1.18.0** — release.yml (crates.io + npm) and python-wheels.yml
+   (PyPI) fire on the tag. PyPI needs `PYPI_API_TOKEN` secret set on the
+   repo first (same 2FA-token dance as npm); npm still blocked on NPM_TOKEN.
+2. **Outreach** — docs/outreach-drafts.md has three reviewed-not-sent drafts
+   (guardrails / red-team / gateway targets); verify claims against the
+   shipped release, personalize, send.
+3. **More language tables** — Hebrew, Thai, Devanagari currently skip the
+   bigram coverage check; same recipe as Cyrillic/Greek/Arabic (CONTRIBUTING
+   documents it — good first-contribution bait).
+4. **FIPS provider feature** — SECURITY.md documents the swap path; implement
+   `fips` feature routing sha2/hmac through aws-lc-rs if a user asks.
+5. **v2.0 planning** — BREAKING-CANDIDATES.md accumulates; no urgency.
