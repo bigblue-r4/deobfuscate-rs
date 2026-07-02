@@ -62,6 +62,8 @@ mod types;
 #[cfg(feature = "audit")]
 pub use audit::{AuditRecord, DetectionRecord};
 pub use config::Config;
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+pub use config::ConfigError;
 pub use normalizer::{analyze, Normalizer};
 pub use types::{Detection, NormalizationResult, PassKind};
 

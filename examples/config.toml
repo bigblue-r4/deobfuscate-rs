@@ -1,6 +1,7 @@
 # deobfuscate — example configuration
 # All fields are optional. Missing fields fall back to documented defaults.
-# Load with: Config::from_file(Path::new("config.toml"))
+# Load with: Config::try_from_file(Path::new("config.toml"))?
+# Unknown fields and invalid values are rejected as parse errors.
 
 # ── Decision thresholds ──────────────────────────────────────────────────────
 flag_threshold  = 0.25   # score >= this → should_flag() (default 0.25)

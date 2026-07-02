@@ -174,6 +174,7 @@ pub(crate) fn serde_weight_skeleton_match() -> f32 {
 /// [`Config::from_toml`] / [`Config::from_file`] (requires the `serde` feature,
 /// which is enabled by default).
 #[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 #[derive(Debug, Clone)]
 pub struct Config {
     // ── Decision thresholds ──────────────────────────────────────────────────
@@ -330,6 +331,51 @@ impl Default for Config {
     }
 }
 
+/// Error returned by [`Config::try_from_file`].
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[derive(Debug)]
+pub enum ConfigError {
+    /// The file could not be read (missing, permission denied, …).
+    Io(std::io::Error),
+    /// The file was read but is not valid TOML for [`Config`]
+    /// (syntax error, wrong field type, unknown field).
+    Parse(toml::de::Error),
+}
+
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(e) => write!(f, "failed to read config file: {e}"),
+            Self::Parse(e) => write!(f, "failed to parse config file: {e}"),
+        }
+    }
+}
+
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+impl std::error::Error for ConfigError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(e) => Some(e),
+            Self::Parse(e) => Some(e),
+        }
+    }
+}
+
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+impl From<std::io::Error> for ConfigError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
+    }
+}
+
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+impl From<toml::de::Error> for ConfigError {
+    fn from(e: toml::de::Error) -> Self {
+        Self::Parse(e)
+    }
+}
+
 impl Config {
     /// Load from a TOML string. Missing fields fall back to documented defaults.
     #[cfg(feature = "serde")]
@@ -337,13 +383,27 @@ impl Config {
         toml::from_str(s)
     }
 
+    /// Load from a file path, surfacing read and parse errors.
+    ///
+    /// Missing fields in the TOML fall back to documented defaults, but an
+    /// unreadable file or invalid TOML (syntax error, wrong field type) is
+    /// reported as [`ConfigError`] rather than silently replaced with defaults.
+    /// Not available on wasm32 targets (no filesystem).
+    #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+    pub fn try_from_file(path: &std::path::Path) -> Result<Self, ConfigError> {
+        let s = std::fs::read_to_string(path)?;
+        Ok(toml::from_str(&s)?)
+    }
+
     /// Load from a file path. Returns [`Config::default`] if the file is missing or unparseable.
     /// Not available on wasm32 targets (no filesystem).
     #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+    #[deprecated(
+        since = "1.16.0",
+        note = "silently falls back to defaults on read/parse errors, which can mask a \
+                misconfigured deployment; use `Config::try_from_file` instead"
+    )]
     pub fn from_file(path: &std::path::Path) -> Self {
-        match std::fs::read_to_string(path) {
-            Ok(s) => toml::from_str(&s).unwrap_or_default(),
-            Err(_) => Self::default(),
-        }
+        Self::try_from_file(path).unwrap_or_default()
     }
 }

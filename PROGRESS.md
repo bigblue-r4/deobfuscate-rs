@@ -156,14 +156,14 @@ NormalizationResult {
 // Config — all 28 fields runtime-configurable
 Config::default()                       // all defaults
 Config::from_toml(s: &str)              // partial TOML string (serde feature)
-Config::from_file(path: &Path)          // file, fallback to default (non-wasm32, serde feature)
+Config::try_from_file(path: &Path)      // file, Result<Config, ConfigError> (non-wasm32, serde feature)
 ```
 
 ### Feature flags
 
 | Feature | Default | What it enables |
 |---------|---------|-----------------|
-| `serde` | yes | Config TOML deserialization; `from_toml()`, `from_file()` |
+| `serde` | yes | Config TOML deserialization; `from_toml()`, `try_from_file()` |
 | `audit` | yes | `AuditRecord` + `DetectionRecord`; sha2 hash; serde_json JSONL methods |
 | `wasm`  | no  | wasm-bindgen + js-sys; JS callable API in src/wasm.rs |
 
@@ -256,7 +256,7 @@ Remaining 13 = semantic attacks (jailbreak framing, multi-hop reasoning) — req
 | Item | Status | Notes |
 |------|--------|-------|
 | `SplitString` greedy skeleton can false-positive on verbatim keywords | Fixed v1.6.0 | Verbatim pre-check (`lower_text.contains(keyword)`) prevents this |
-| `Config::from_file` not available on wasm32 | By design | Gated `#[cfg(not(target_arch = "wasm32"))]` |
+| `Config::try_from_file` not available on wasm32 | By design | Gated `#[cfg(not(target_arch = "wasm32"))]` |
 | No `no_std` support | Open | Would need to drop filesystem deps and embed base64 decoder |
 | Audit detail strings may embed decoded snippets | By design | Truncated to 200 chars in DetectionRecord; raw input never stored |
 | `SplitString` detection-only (does not normalize text) | By design | Keyword fragments can't be safely removed without semantic context |

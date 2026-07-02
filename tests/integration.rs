@@ -13,9 +13,28 @@ fn config_from_toml_overrides_defaults() {
 
 #[cfg(feature = "serde")]
 #[test]
+#[allow(deprecated)]
 fn config_from_file_falls_back_to_defaults_on_missing_file() {
     let cfg = Config::from_file(std::path::Path::new("/nonexistent/config.toml"));
     assert_eq!(cfg.flag_threshold, Config::default().flag_threshold);
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn config_try_from_file_surfaces_errors() {
+    use deobfuscate::ConfigError;
+
+    // Missing file → Io error, not silent defaults.
+    let e = Config::try_from_file(std::path::Path::new("/nonexistent/config.toml")).unwrap_err();
+    assert!(matches!(e, ConfigError::Io(_)));
+
+    // Invalid field type → Parse error, not silent defaults.
+    let path = std::env::temp_dir().join("deobfuscate_integration_bad_config.toml");
+    std::fs::write(&path, "weight_homoglyph = \"invalid\"").unwrap();
+    let e = Config::try_from_file(&path).unwrap_err();
+    std::fs::remove_file(&path).ok();
+    assert!(matches!(e, ConfigError::Parse(_)));
+    assert!(e.to_string().contains("parse"));
 }
 
 // ── End-to-end pipeline ───────────────────────────────────────────────────────

@@ -4,6 +4,20 @@ All notable changes to `deobfuscate` are documented here.
 
 ---
 
+## [1.16.0] — 2026-07-01
+
+### Added
+- `Config::try_from_file(path) -> Result<Config, ConfigError>` — file-based config loading that surfaces errors instead of swallowing them. `ConfigError::Io` for unreadable files, `ConfigError::Parse` for invalid TOML (syntax error, wrong field type, unknown field)
+- `ConfigError` exported from crate root (`serde` feature, non-wasm32)
+
+### Changed
+- `Config` deserialization now uses `serde(deny_unknown_fields)` — a typo'd field name (e.g. `weight_homogliph`) is a parse error instead of being silently ignored. Affects `from_toml`, `try_from_file`, and the deprecated `from_file`
+
+### Deprecated
+- `Config::from_file` — silently fell back to `Config::default()` on read/parse errors, so a misconfigured deployment (e.g. `weight_homoglyph = "invalid"`) ran with default thresholds and no warning. Use `try_from_file` and handle the error
+
+---
+
 ## [1.15.0] — 2026-07-01
 
 ### Changed

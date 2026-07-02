@@ -940,6 +940,7 @@ fn unicode_escape_mixed_formats() {
 
 #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
 #[test]
+#[allow(deprecated)]
 fn config_from_file_missing_returns_default() {
     let c = Config::from_file(std::path::Path::new("/nonexistent/path/deobfuscate.toml"));
     let d = Config::default();
@@ -947,6 +948,45 @@ fn config_from_file_missing_returns_default() {
     assert_eq!(c.block_threshold, d.block_threshold);
     assert_eq!(c.weight_bidi, d.weight_bidi);
     assert_eq!(c.weight_leet, d.weight_leet);
+}
+
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[test]
+fn config_try_from_file_missing_returns_io_error() {
+    let e = Config::try_from_file(std::path::Path::new("/nonexistent/path/deobfuscate.toml"))
+        .unwrap_err();
+    assert!(matches!(e, crate::ConfigError::Io(_)), "got {e:?}");
+}
+
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[test]
+fn config_try_from_file_invalid_toml_returns_parse_error() {
+    let dir = std::env::temp_dir();
+    let path = dir.join("deobfuscate_test_invalid_config.toml");
+    std::fs::write(&path, "weight_homoglyph = \"invalid\"").unwrap();
+    let e = Config::try_from_file(&path).unwrap_err();
+    std::fs::remove_file(&path).ok();
+    assert!(matches!(e, crate::ConfigError::Parse(_)), "got {e:?}");
+}
+
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[test]
+fn config_try_from_file_valid_toml_overrides_defaults() {
+    let dir = std::env::temp_dir();
+    let path = dir.join("deobfuscate_test_valid_config.toml");
+    std::fs::write(&path, "block_threshold = 0.90\nweight_leet = 0.10").unwrap();
+    let c = Config::try_from_file(&path).unwrap();
+    std::fs::remove_file(&path).ok();
+    assert_eq!(c.block_threshold, 0.90);
+    assert_eq!(c.weight_leet, 0.10);
+    assert_eq!(c.flag_threshold, Config::default().flag_threshold);
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn config_from_toml_rejects_unknown_field() {
+    // A typo'd weight name must be a hard error, not silently ignored.
+    assert!(Config::from_toml("weight_homogliph = 0.9").is_err());
 }
 
 // ─────────────────────────────────────────────────────────────────────────

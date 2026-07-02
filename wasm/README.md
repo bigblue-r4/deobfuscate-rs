@@ -68,6 +68,6 @@ export function score(input: string): number;
 
 ## Notes
 
-- `Config::from_file` is not available on wasm32 (no filesystem). Use `Config::default()` or `Config::from_toml()` instead.
+- `Config::try_from_file` / `Config::from_file` are not available on wasm32 (no filesystem). Use `Config::default()` or `Config::from_toml()` instead.
 - The `audit` and `serde` features are excluded when building with `--no-default-features --features wasm` to minimize binary size.
 - See `wasm/example.html` for a self-contained browser demo.

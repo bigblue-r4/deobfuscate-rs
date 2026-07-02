@@ -155,8 +155,9 @@ leet_min_pct = 60
 use deobfuscate::{Config, Normalizer};
 use std::path::Path;
 
-// From file (returns Config::default() if file missing or unreadable)
-let config = Config::from_file(Path::new("config.toml"));  // not available on wasm32
+// From file — read/parse errors (missing file, bad TOML, wrong field type,
+// unknown field) are surfaced as ConfigError, never silently defaulted
+let config = Config::try_from_file(Path::new("config.toml"))?;  // not available on wasm32
 
 // From inline TOML string
 let config = Config::from_toml("block_threshold = 0.90").unwrap();
