@@ -10,6 +10,10 @@ text for the model and a structured detection report for your audit trail.
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![crates.io](https://img.shields.io/crates/v/deobfuscate.svg)](https://crates.io/crates/deobfuscate)
 
+**Fast enough to run on every request**: ~2,000 prompts/sec single-threaded
+at 1 KiB (≈0.5 ms added latency) on a 2014 desktop CPU, scaling with cores —
+methodology and full numbers in [BENCHMARKS.md](BENCHMARKS.md).
+
 See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ---

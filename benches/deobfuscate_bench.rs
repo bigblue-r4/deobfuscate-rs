@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use deobfuscate::analyze;
 
 // Reproducible CyberEC-style adversarial dataset — 13 encoding-evasion cases
@@ -83,5 +83,77 @@ fn bench_throughput(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_adversarial, bench_benign, bench_throughput);
+// ─────────────────────────────────────────────────────────────────────────────
+// Realistic prompt sizes — the headline numbers (see BENCHMARKS.md)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Deterministic benign English prose of ~`target_chars` chars — the common
+/// case a gateway pays for on every request.
+fn make_prompt(target_chars: usize) -> String {
+    const SENTENCES: &[&str] = &[
+        "Summarize the attached quarterly report and highlight the three largest cost drivers. ",
+        "The deployment pipeline failed at the integration test stage after the last merge. ",
+        "Please draft a follow-up email to the vendor about the delayed hardware shipment. ",
+        "Compare the two proposals and list the trade-offs in reliability and total cost. ",
+        "What NIST 800-53 controls apply to a FedRAMP Moderate SaaS deployment? ",
+    ];
+    let mut s = String::with_capacity(target_chars + 100);
+    let mut i = 0;
+    while s.chars().count() < target_chars {
+        s.push_str(SENTENCES[i % SENTENCES.len()]);
+        i += 1;
+    }
+    s
+}
+
+fn bench_prompt_sizes(c: &mut Criterion) {
+    let mut group = c.benchmark_group("prompt_size");
+    for &size in &[128usize, 1024, 8192, 65536] {
+        let prompt = make_prompt(size);
+        group.throughput(Throughput::Bytes(prompt.len() as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(size), &prompt, |b, p| {
+            b.iter(|| analyze(black_box(p)))
+        });
+    }
+    group.finish();
+}
+
+fn bench_pass_configs(c: &mut Criterion) {
+    use deobfuscate::{Normalizer, PassKind};
+    let prompt = make_prompt(1024);
+    let mut group = c.benchmark_group("pass_config_1k");
+    group.throughput(Throughput::Bytes(prompt.len() as u64));
+
+    group.bench_function("all_19_passes", |b| {
+        let n = Normalizer::default();
+        b.iter(|| n.analyze(black_box(&prompt)))
+    });
+    group.bench_function("no_statistical", |b| {
+        // Without the per-token statistical passes (entropy/leet)
+        let n = Normalizer::default()
+            .disable(PassKind::EntropyBigram)
+            .disable(PassKind::Leetspeak);
+        b.iter(|| n.analyze(black_box(&prompt)))
+    });
+    group.bench_function("unicode_core_only", |b| {
+        // Minimal confusable defense: the passes an edge deployment keeps
+        let n = Normalizer::new()
+            .enable(PassKind::PreScanNfc)
+            .enable(PassKind::InvisibleStrip)
+            .enable(PassKind::BiDiControl)
+            .enable(PassKind::Homoglyph)
+            .enable(PassKind::ScriptIntrusion);
+        b.iter(|| n.analyze(black_box(&prompt)))
+    });
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_adversarial,
+    bench_benign,
+    bench_throughput,
+    bench_prompt_sizes,
+    bench_pass_configs
+);
 criterion_main!(benches);
