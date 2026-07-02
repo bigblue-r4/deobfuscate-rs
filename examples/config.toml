@@ -42,3 +42,8 @@ leet_min_pct = 60
 # base64_min_len      = 12
 # morse_min_span      = 10
 # morse_min_morse_pct = 60
+
+# ── SemanticAnomaly (feature = "semantic") ───────────────────────────────────
+# Only used when a SemanticScorer is installed via with_semantic_scorer().
+# semantic_threshold = 0.50   # scorer output at/above this records a detection
+# weight_semantic    = 0.60   # score weight for semantic-anomaly detections

@@ -41,6 +41,8 @@ pub(crate) const DEFAULT_WEIGHT_UNICODE_ESCAPE: f32 = 0.80;
 pub(crate) const DEFAULT_WEIGHT_ROT13: f32 = 0.80;
 pub(crate) const DEFAULT_WEIGHT_PUNYCODE: f32 = 0.85;
 pub(crate) const DEFAULT_WEIGHT_SKELETON_MATCH: f32 = 0.75;
+pub(crate) const DEFAULT_SEMANTIC_THRESHOLD: f32 = 0.50;
+pub(crate) const DEFAULT_WEIGHT_SEMANTIC: f32 = 0.60;
 
 // Serde per-field default functions — only compiled with the `serde` feature.
 #[cfg(feature = "serde")]
@@ -171,6 +173,14 @@ pub(crate) fn serde_weight_punycode() -> f32 {
 pub(crate) fn serde_weight_skeleton_match() -> f32 {
     DEFAULT_WEIGHT_SKELETON_MATCH
 }
+#[cfg(feature = "serde")]
+pub(crate) fn serde_semantic_threshold() -> f32 {
+    DEFAULT_SEMANTIC_THRESHOLD
+}
+#[cfg(feature = "serde")]
+pub(crate) fn serde_weight_semantic() -> f32 {
+    DEFAULT_WEIGHT_SEMANTIC
+}
 
 /// Runtime configuration for all pass thresholds and weights.
 ///
@@ -295,6 +305,15 @@ pub struct Config {
     #[cfg_attr(feature = "serde", serde(default = "serde_weight_skeleton_match"))]
     pub weight_skeleton_match: f32,
 
+    // ── SemanticAnomaly (feature = "semantic"; fields always present so TOML
+    //    configs stay portable across feature sets) ─────────────────────────
+    /// SemanticScorer output at or above this records a detection. Default 0.50.
+    #[cfg_attr(feature = "serde", serde(default = "serde_semantic_threshold"))]
+    pub semantic_threshold: f32,
+    /// Weight for SemanticAnomaly detections. Default 0.60.
+    #[cfg_attr(feature = "serde", serde(default = "serde_weight_semantic"))]
+    pub weight_semantic: f32,
+
     // ── EntropyBigram vocabulary override ────────────────────────────────────
     /// Additional English bigrams merged with the built-in ~130-entry frequency
     /// table for the EntropyBigram coverage check. Each entry must be exactly two
@@ -353,6 +372,8 @@ impl Default for Config {
             weight_rot13: DEFAULT_WEIGHT_ROT13,
             weight_punycode: DEFAULT_WEIGHT_PUNYCODE,
             weight_skeleton_match: DEFAULT_WEIGHT_SKELETON_MATCH,
+            semantic_threshold: DEFAULT_SEMANTIC_THRESHOLD,
+            weight_semantic: DEFAULT_WEIGHT_SEMANTIC,
             extra_english_bigrams: Vec::new(),
             extra_cyrillic_bigrams: Vec::new(),
             extra_greek_bigrams: Vec::new(),
@@ -452,6 +473,8 @@ impl Config {
             ("weight_rot13", self.weight_rot13),
             ("weight_punycode", self.weight_punycode),
             ("weight_skeleton_match", self.weight_skeleton_match),
+            ("semantic_threshold", self.semantic_threshold),
+            ("weight_semantic", self.weight_semantic),
         ];
         let mut problems: Vec<String> = Vec::new();
         for (name, v) in unit_ranged {

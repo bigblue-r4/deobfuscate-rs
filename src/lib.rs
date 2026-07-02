@@ -63,6 +63,8 @@ mod config;
 mod math;
 mod normalizer;
 mod passes;
+#[cfg(feature = "semantic")]
+mod semantic;
 mod tables;
 #[cfg(test)]
 mod tests;
@@ -74,6 +76,8 @@ pub use config::Config;
 #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
 pub use config::ConfigError;
 pub use normalizer::{analyze, Normalizer};
+#[cfg(feature = "semantic")]
+pub use semantic::{PhraseOverrideScorer, SemanticScorer};
 pub use types::{Detection, NormalizationResult, PassKind};
 
 #[cfg(feature = "wasm")]

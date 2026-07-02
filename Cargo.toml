@@ -25,6 +25,9 @@ std     = ["dep:unicode_skeleton", "base64/std", "unicode-normalization/std", "s
 serde   = ["std", "dep:serde", "dep:toml"]
 audit   = ["serde", "dep:sha2", "dep:serde_json", "dep:hmac"]
 wasm    = ["std", "dep:wasm-bindgen", "dep:js-sys"]
+# semantic: opt-in SemanticScorer trait hook + PhraseOverrideScorer reference
+# implementation. No dependencies; zero cost when disabled.
+semantic = []
 
 [dependencies]
 base64                = { version = "0.22", default-features = false, features = ["alloc"] }

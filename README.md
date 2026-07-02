@@ -225,6 +225,37 @@ r.detections          // Vec<Detection> — full detail per event
 
 ---
 
+## Semantic scoring hook (feature = `semantic`)
+
+Structural passes deliberately don't judge *meaning* — plain-text
+"ignore all previous instructions" contains no encoding evasion and scores 0.
+The opt-in `semantic` feature (zero dependencies, zero cost when disabled)
+adds the plug-in boundary for that layer:
+
+```rust
+use deobfuscate::{Normalizer, SemanticScorer, PhraseOverrideScorer};
+
+// Reference heuristic: instruction-override phrase patterns
+let n = Normalizer::default().with_semantic_scorer(PhraseOverrideScorer::new());
+
+// Or plug in your own model (embedding distance, perplexity, LLM judge, …)
+struct MyScorer;
+impl SemanticScorer for MyScorer {
+    fn score(&self, normalized: &str) -> f32 { /* 0.0..=1.0 */ 0.0 }
+    fn name(&self) -> &str { "my-scorer" }
+}
+let n = Normalizer::default().with_semantic_scorer(MyScorer);
+```
+
+The scorer runs once per `analyze()`, **after** all structural passes, against
+the normalized text — encodings this crate strips can't hide phrasing from it.
+Scores at or above `semantic_threshold` (default 0.50) record a
+`semantic-anomaly` detection weighted by `weight_semantic` (default 0.60).
+The bundled `PhraseOverrideScorer` is a phrase-pattern heuristic, not a model;
+treat it as a starting point, not a semantic defense on its own.
+
+---
+
 ## Audit trail
 
 The `audit` feature (enabled by default) attaches a payload-free [`AuditRecord`] to every

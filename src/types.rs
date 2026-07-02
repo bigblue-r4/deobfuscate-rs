@@ -59,6 +59,10 @@ pub enum PassKind {
     /// TR39 skeleton algorithm detects cross-script confusable that reduces to an injection
     /// keyword; catches homoglyphs outside the static HOMOGLYPHS table and mixed-script attacks.
     SkeletonMatch,
+    /// A user-installed [`SemanticScorer`](crate::Normalizer::with_semantic_scorer) scored the
+    /// normalized text at or above `Config::semantic_threshold` (feature = "semantic").
+    /// Never fires unless a scorer is installed.
+    SemanticAnomaly,
 }
 
 impl core::fmt::Display for PassKind {
@@ -83,6 +87,7 @@ impl core::fmt::Display for PassKind {
             PassKind::Rot13 => "rot13",
             PassKind::Punycode => "punycode",
             PassKind::SkeletonMatch => "skeleton-match",
+            PassKind::SemanticAnomaly => "semantic-anomaly",
         })
     }
 }
@@ -134,6 +139,8 @@ impl Detection {
             PassKind::PreScanNfc => 0.30,
             // Skeleton match: keyword-gated, comparable confidence to Homoglyph
             PassKind::SkeletonMatch => 0.80,
+            // Semantic scorer output is heuristic/model-driven — moderate base
+            PassKind::SemanticAnomaly => 0.55,
         };
         // Structural boost: large encoding footprint (big length change) raises confidence.
         let orig = self.original.chars().count();
