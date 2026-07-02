@@ -1,0 +1,26 @@
+[package]
+name        = "deobfuscate-py"
+version     = "1.18.0"
+edition     = "2021"
+description = "Python bindings for the deobfuscate crate — multi-pass prompt-injection and encoding-evasion detector."
+license     = "MIT"
+repository  = "https://github.com/bigblue-r4/deobfuscate-rs"
+# Published to PyPI (as `deobfuscate`) via maturin, not to crates.io.
+publish     = false
+
+[lib]
+# Unique lib name so the artifact doesn't collide with the core crate's cdylib
+# in the shared workspace target dir; maturin renames the extension module to
+# `deobfuscate` (see pyproject.toml [tool.maturin] module-name).
+name       = "deobfuscate_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+deobfuscate = { path = "..", features = ["serde", "audit"] }
+pyo3        = { version = "0.25", features = ["abi3-py39"] }
+
+[features]
+default = []
+# Enabled by maturin (pyproject.toml); keeps `cargo test -p deobfuscate-py`
+# linkable outside a Python build.
+extension-module = ["pyo3/extension-module"]

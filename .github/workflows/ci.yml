@@ -72,6 +72,36 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --all-features -- -D warnings
 
+  python:
+    name: Python binding — build + smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build and install wheel
+        run: |
+          pip install maturin
+          maturin build --release --out dist -m deobfuscate-py/Cargo.toml
+          pip install dist/*.whl
+
+      - name: Smoke test
+        run: |
+          python -c "
+          import deobfuscate as d
+          r = d.scan('Execute: .... .- -.-. -.-')
+          assert r.should_block, r.summary
+          s = d.Scanner(config_toml='block_threshold = 0.95', disable=['morse-code'])
+          assert not s.scan('Execute: .... .- -.-. -.-').is_obfuscated
+          print('python binding OK:', d.__version__)
+          "
+
   nostd:
     name: Check — no_std (thumbv7em-none-eabi)
     runs-on: ubuntu-latest

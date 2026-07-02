@@ -285,6 +285,32 @@ See [`examples/audit.rs`](examples/audit.rs) for a runnable demo.
 
 ---
 
+## Python
+
+The same engine ships as a Python package —
+[`deobfuscate` on PyPI](https://pypi.org/project/deobfuscate/) — a PyO3 wrapper
+maintained in this repo ([`deobfuscate-py/`](deobfuscate-py/)) and versioned in
+lockstep with the crate. abi3 wheels for Linux/macOS/Windows, Python ≥ 3.9,
+no Python dependencies.
+
+```python
+import deobfuscate
+
+report = deobfuscate.scan(user_input)
+if report.should_block:
+    log.warning("blocked: %s", report.summary)
+else:
+    send_to_model(report.normalized)
+
+# pandas-friendly batch (releases the GIL):
+results = pd.DataFrame(r.to_dict() for r in deobfuscate.scan_batch(texts))
+```
+
+See [`deobfuscate-py/README.md`](deobfuscate-py/README.md) for the
+`Scanner(config_toml=..., disable=[...])` configuration API.
+
+---
+
 ## no_std / minimal profile
 
 For embedded and edge deployment the core detection passes compile without

@@ -1,3 +1,7 @@
+[workspace]
+members = ["deobfuscate-py"]
+exclude = ["fuzz"]
+
 [package]
 name        = "deobfuscate"
 version     = "1.17.0"

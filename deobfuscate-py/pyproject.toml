@@ -1,0 +1,33 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "deobfuscate"
+description = "Multi-pass prompt-injection and encoding-evasion detector for LLM pipelines (Rust core)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "bigblue-r4" }]
+keywords = ["llm", "security", "prompt-injection", "unicode", "homoglyph", "obfuscation"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Security",
+    "Topic :: Text Processing :: Filters",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/bigblue-r4/deobfuscate-rs"
+Changelog = "https://github.com/bigblue-r4/deobfuscate-rs/blob/master/CHANGELOG.md"
+
+[tool.maturin]
+# Rust lib is `deobfuscate_py` (avoids a workspace artifact collision with the
+# core crate's cdylib); the importable module is still `deobfuscate`.
+module-name = "deobfuscate"
+features = ["extension-module"]
+strip = true
