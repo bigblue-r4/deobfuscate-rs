@@ -303,6 +303,19 @@ pub struct Config {
     /// Default empty.
     #[cfg_attr(feature = "serde", serde(default))]
     pub extra_english_bigrams: Vec<String>,
+    /// Additional Cyrillic bigrams merged with the built-in Russian/Ukrainian
+    /// frequency table. Each entry must be exactly two alphabetic chars.
+    /// Default empty.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub extra_cyrillic_bigrams: Vec<String>,
+    /// Additional Greek bigrams merged with the built-in frequency table.
+    /// Each entry must be exactly two alphabetic chars. Default empty.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub extra_greek_bigrams: Vec<String>,
+    /// Additional Arabic bigrams merged with the built-in frequency table.
+    /// Each entry must be exactly two alphabetic chars. Default empty.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub extra_arabic_bigrams: Vec<String>,
 }
 
 impl Default for Config {
@@ -341,6 +354,9 @@ impl Default for Config {
             weight_punycode: DEFAULT_WEIGHT_PUNYCODE,
             weight_skeleton_match: DEFAULT_WEIGHT_SKELETON_MATCH,
             extra_english_bigrams: Vec::new(),
+            extra_cyrillic_bigrams: Vec::new(),
+            extra_greek_bigrams: Vec::new(),
+            extra_arabic_bigrams: Vec::new(),
         }
     }
 }
@@ -469,6 +485,19 @@ impl Config {
                 problems.push(format!(
                     "extra_english_bigrams entries must be exactly two ASCII letters, got {bg:?}"
                 ));
+            }
+        }
+        for (field, list) in [
+            ("extra_cyrillic_bigrams", &self.extra_cyrillic_bigrams),
+            ("extra_greek_bigrams", &self.extra_greek_bigrams),
+            ("extra_arabic_bigrams", &self.extra_arabic_bigrams),
+        ] {
+            for bg in list {
+                if bg.chars().count() != 2 || !bg.chars().all(|c| c.is_alphabetic()) {
+                    problems.push(format!(
+                        "{field} entries must be exactly two alphabetic characters, got {bg:?}"
+                    ));
+                }
             }
         }
         if problems.is_empty() {

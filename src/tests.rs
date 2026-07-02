@@ -1083,6 +1083,140 @@ fn extra_english_bigrams_suppress_domain_false_positive() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Per-script bigram tables (Cyrillic / Greek / Arabic / no-table scripts)
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn entropy_benign_russian_prose_clean() {
+    // Regression: scored against ENGLISH_BIGRAMS this fired EntropyBigram
+    // at score 0.61 — above the default block threshold.
+    let r = analyze("Пожалуйста проверьте документацию перед запуском системы");
+    assert!(
+        !r.detections
+            .iter()
+            .any(|d| d.kind == PassKind::EntropyBigram),
+        "benign Russian prose must not fire EntropyBigram: {}",
+        r.summary()
+    );
+    assert!(
+        !r.should_flag(),
+        "benign Russian prose flagged: {}",
+        r.summary()
+    );
+}
+
+#[test]
+fn entropy_benign_ukrainian_prose_clean() {
+    let r = analyze("Будь ласка перевірте документацію перед запуском");
+    assert!(
+        !r.should_flag(),
+        "benign Ukrainian prose flagged: {}",
+        r.summary()
+    );
+}
+
+#[test]
+fn entropy_benign_arabic_prose_clean() {
+    let r = analyze("يرجى مراجعة الوثائق قبل تشغيل النظام في الخادم");
+    assert!(
+        !r.should_flag(),
+        "benign Arabic prose flagged: {}",
+        r.summary()
+    );
+}
+
+#[test]
+fn entropy_benign_greek_prose_clean() {
+    let r = analyze("Παρακαλώ ελέγξτε την τεκμηρίωση πριν την εκτέλεση");
+    assert!(
+        !r.should_flag(),
+        "benign Greek prose flagged: {}",
+        r.summary()
+    );
+}
+
+#[test]
+fn entropy_no_table_script_skips_bigram_check() {
+    // Hebrew has no built-in bigram table: the coverage sub-check must be
+    // skipped (not scored against English), so benign Hebrew stays clean.
+    let r = analyze("אנא בדוק את התיעוד לפני הפעלת המערכת בשרת");
+    assert!(
+        !r.should_flag(),
+        "benign Hebrew prose flagged: {}",
+        r.summary()
+    );
+}
+
+#[test]
+fn entropy_random_cyrillic_gibberish_fires() {
+    // Rare-pair Cyrillic token: near-zero coverage against CYRILLIC_BIGRAMS.
+    let r = analyze("отчёт содержит чжфъэюйщхцчжфъэю данные");
+    assert!(
+        r.detections
+            .iter()
+            .any(|d| d.kind == PassKind::EntropyBigram),
+        "low-coverage Cyrillic token must fire EntropyBigram: {}",
+        r.summary()
+    );
+}
+
+#[test]
+fn extra_cyrillic_bigrams_suppress_false_positive() {
+    let input = "чжфъэюйщхцчжфъэю";
+    let fired = |r: &crate::NormalizationResult| {
+        r.detections
+            .iter()
+            .any(|d| d.kind == PassKind::EntropyBigram)
+    };
+    assert!(fired(&analyze(input)), "sanity: token must fire by default");
+
+    let config = Config {
+        extra_cyrillic_bigrams: vec![
+            "чж".into(),
+            "жф".into(),
+            "фъ".into(),
+            "ъэ".into(),
+            "эю".into(),
+            "юй".into(),
+            "йщ".into(),
+            "щх".into(),
+            "хц".into(),
+            "цч".into(),
+        ],
+        ..Config::default()
+    };
+    let r = Normalizer::default().with_config(config).analyze(input);
+    assert!(
+        !fired(&r),
+        "EntropyBigram must not fire once Cyrillic domain bigrams are declared"
+    );
+}
+
+#[test]
+fn config_validate_rejects_bad_script_bigrams() {
+    let config = Config {
+        extra_cyrillic_bigrams: vec!["сто".into()], // three chars
+        extra_arabic_bigrams: vec!["a1".into()],    // digit
+        ..Config::default()
+    };
+    let err = config.validate().unwrap_err();
+    assert!(err.contains("extra_cyrillic_bigrams"), "got: {err}");
+    assert!(err.contains("extra_arabic_bigrams"), "got: {err}");
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn config_toml_parses_script_bigram_fields() {
+    let cfg = Config::from_toml(
+        "extra_cyrillic_bigrams = [\"юз\"]\nextra_greek_bigrams = [\"γκ\"]\nextra_arabic_bigrams = [\"چی\"]",
+    )
+    .unwrap();
+    assert_eq!(cfg.extra_cyrillic_bigrams, vec!["юз".to_string()]);
+    assert_eq!(cfg.extra_greek_bigrams, vec!["γκ".to_string()]);
+    assert_eq!(cfg.extra_arabic_bigrams, vec!["چی".to_string()]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Confidence tests
 // ─────────────────────────────────────────────────────────────────────────
 

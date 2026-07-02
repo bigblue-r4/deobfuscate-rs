@@ -26,6 +26,13 @@ leet_min_pct = 60
 # with the built-in ~130-entry English bigram table. Use when domain vocabulary
 # (genomics, legal acronyms, ...) trips low-coverage false positives.
 # extra_english_bigrams = ["gt", "cg", "aa"]
+#
+# Per-script tables: tokens are scored against the bigram table of their
+# dominant script (built-in tables: English/Latin, Cyrillic, Greek, Arabic).
+# Each extra entry must be exactly two alphabetic characters of that script.
+# extra_cyrillic_bigrams = ["юз"]
+# extra_greek_bigrams    = ["γκ"]
+# extra_arabic_bigrams   = ["پی"]
 
 # ── Other tunable thresholds ─────────────────────────────────────────────────
 # entropy_high        = 5.2    # Shannon entropy (bits) above which a token is suspicious

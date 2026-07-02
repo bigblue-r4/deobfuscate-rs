@@ -96,15 +96,16 @@ Default thresholds (configurable via [`Config`](#configuration)):
 ## Measured detection rates
 
 Evaluated against the versioned corpora in `tests/corpus/`: 24 adversarial
-samples covering all 19 pass categories, and 21 benign hard cases chosen to
+samples covering all 19 pass categories, and 26 benign hard cases chosen to
 stress the detectors — git SHAs, UUIDs, API-key prefixes, shell commands,
-Japanese/French/German prose, math notation, and emoji.
+Japanese/French/German/Russian/Ukrainian/Arabic/Greek/Hebrew prose, math
+notation, and emoji.
 
 | Metric (default config) | Result |
 |--------------------------|--------|
 | Detection rate (flag, score ≥ 0.25) | **24/24 = 100%** |
 | Block rate (score ≥ 0.60) | 22/24 = 91.7% |
-| False positives on benign corpus | **0/21 = 0%** |
+| False positives on benign corpus | **0/26 = 0%** |
 
 Reproduce with `cargo run --example corpus_eval` for the per-category
 breakdown. Both rates are enforced in CI by `tests/corpus_eval.rs`, so a pass
@@ -180,12 +181,24 @@ the 1.0 score cap, losing the relative weighting between passes), percentages at
 most 100. `from_toml` / `try_from_file` reject violations; when building `Config`
 as a struct literal, call `config.validate()` yourself.
 
-For domains whose vocabulary trips `EntropyBigram` false positives (genomics,
-legal acronyms, …), declare the domain's letter pairs:
+### Language-aware bigram coverage
+
+`EntropyBigram` scores each token against the bigram table of its **dominant
+script** — built-in frequency tables ship for English/Latin, Cyrillic
+(Russian/Ukrainian), Greek, and Arabic, so benign non-English prose is not
+misread as an encoded payload. Tokens in scripts without a table (Hebrew,
+Thai, …) skip the coverage check; the Shannon-entropy check still applies.
+CJK text is handled separately by the `CjkSuperposition` entropy pass.
+
+For domains whose vocabulary trips false positives (genomics, legal acronyms,
+transliterated names, …), declare the domain's letter pairs per script:
 
 ```toml
-# merged with the built-in ~130-entry English bigram table (case-insensitive)
-extra_english_bigrams = ["gt", "cg", "aa"]
+# merged with the built-in per-script frequency tables
+extra_english_bigrams  = ["gt", "cg", "aa"]   # two ASCII letters, case-insensitive
+extra_cyrillic_bigrams = ["юз"]                # two alphabetic chars of that script
+extra_greek_bigrams    = ["γκ"]
+extra_arabic_bigrams   = ["چی"]
 ```
 
 ---

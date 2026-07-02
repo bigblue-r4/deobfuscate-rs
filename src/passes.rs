@@ -918,6 +918,50 @@ pub(crate) fn pass_leet(
     }
 }
 
+/// Pick the bigram table matching the token's dominant script, with its
+/// user-supplied extra entries. `None` when the dominant script has no table.
+fn bigram_table_for<'a>(
+    chars: &[char],
+    config: &'a Config,
+) -> Option<(&'static [&'static str], &'a [String])> {
+    let (mut latin, mut cyrillic, mut greek, mut arabic, mut other) =
+        (0u32, 0u32, 0u32, 0u32, 0u32);
+    for &c in chars.iter().filter(|c| c.is_alphabetic()) {
+        let n = c as u32;
+        if c.is_ascii_alphabetic() || (0x00C0..=0x024F).contains(&n) {
+            latin += 1;
+        } else if (0x0400..=0x052F).contains(&n) {
+            cyrillic += 1;
+        } else if (0x0370..=0x03FF).contains(&n) || (0x1F00..=0x1FFF).contains(&n) {
+            greek += 1;
+        } else if (0x0600..=0x06FF).contains(&n)
+            || (0x0750..=0x077F).contains(&n)
+            || (0x08A0..=0x08FF).contains(&n)
+            || (0xFB50..=0xFDFF).contains(&n)
+            || (0xFE70..=0xFEFF).contains(&n)
+        {
+            arabic += 1;
+        } else {
+            other += 1;
+        }
+    }
+    let max = latin.max(cyrillic).max(greek).max(arabic);
+    if max == 0 || other > max {
+        return None;
+    }
+    // Ties resolve toward Latin/English: a 50/50 mixed-script token scores
+    // low coverage against any single table, which is exactly the signal.
+    Some(if latin == max {
+        (ENGLISH_BIGRAMS, config.extra_english_bigrams.as_slice())
+    } else if cyrillic == max {
+        (CYRILLIC_BIGRAMS, config.extra_cyrillic_bigrams.as_slice())
+    } else if greek == max {
+        (GREEK_BIGRAMS, config.extra_greek_bigrams.as_slice())
+    } else {
+        (ARABIC_BIGRAMS, config.extra_arabic_bigrams.as_slice())
+    })
+}
+
 #[allow(clippy::ptr_arg)]
 pub(crate) fn pass_entropy_bigram(
     text: &mut String,
@@ -975,30 +1019,32 @@ pub(crate) fn pass_entropy_bigram(
             })
             .sum();
 
-        // Sub-check B: English bigram coverage
+        // Sub-check B: bigram coverage against the token's dominant script.
+        // Scoring Cyrillic/Greek/Arabic prose against English bigrams flags
+        // (and at default weights, blocks) benign non-English text.
         let upper: Vec<char> = chars
             .iter()
             .map(|c| c.to_uppercase().next().unwrap_or(*c))
             .collect();
         let alpha_count = chars.iter().filter(|c| c.is_alphabetic()).count();
-        let bigram_score = if alpha_count >= ENTROPY_MIN_ALPHA {
-            let pairs = n - 1;
-            let matches_bigram = |b: &str, i: usize| {
-                let mut bc = b.chars().map(|c| c.to_ascii_uppercase());
-                bc.next() == Some(upper[i]) && bc.next() == Some(upper[i + 1])
-            };
-            let hits = (0..pairs)
-                .filter(|&i| {
-                    ENGLISH_BIGRAMS.iter().any(|&b| matches_bigram(b, i))
-                        || config
-                            .extra_english_bigrams
-                            .iter()
-                            .any(|b| matches_bigram(b, i))
-                })
-                .count();
-            hits as f32 / pairs as f32
-        } else {
-            1.0 // not enough alpha chars — assume clean
+        let bigram_score = match bigram_table_for(&chars, config) {
+            Some((table, extra)) if alpha_count >= ENTROPY_MIN_ALPHA => {
+                let pairs = n - 1;
+                let matches_bigram = |b: &str, i: usize| {
+                    let mut bc = b.chars().flat_map(|c| c.to_uppercase());
+                    bc.next() == Some(upper[i]) && bc.next() == Some(upper[i + 1])
+                };
+                let hits = (0..pairs)
+                    .filter(|&i| {
+                        table.iter().any(|&b| matches_bigram(b, i))
+                            || extra.iter().any(|b| matches_bigram(b, i))
+                    })
+                    .count();
+                hits as f32 / pairs as f32
+            }
+            // Dominant script has no coverage table (Hebrew, Thai, …) or the
+            // token is too short — the entropy sub-check still applies.
+            _ => 1.0,
         };
 
         let high_entropy = entropy > config.entropy_high;

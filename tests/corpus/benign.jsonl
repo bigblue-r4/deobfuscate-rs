@@ -19,3 +19,8 @@
 {"category":"technical","text":"The equation x^2 + y^2 = r^2 describes a circle of radius r."}
 {"category":"technical","text":"π ≈ 3.14159, and the Greek letter alpha (α) denotes the angle."}
 {"category":"emoji","text":"Great work team! 🎉 Ship it 🚀"}
+{"category":"prose-cyrillic","text":"Пожалуйста проверьте документацию перед запуском системы на сервере"}
+{"category":"prose-cyrillic","text":"Будь ласка перевірте документацію перед запуском програми"}
+{"category":"prose-arabic","text":"يرجى مراجعة الوثائق قبل تشغيل النظام في الخادم الرئيسي"}
+{"category":"prose-greek","text":"Παρακαλώ ελέγξτε την τεκμηρίωση πριν την εκτέλεση του προγράμματος"}
+{"category":"prose-hebrew","text":"אנא בדוק את התיעוד לפני הפעלת המערכת בשרת הראשי"}
