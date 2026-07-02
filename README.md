@@ -174,6 +174,20 @@ Requires the `serde` feature (enabled by default). Disable with `default-feature
 for a no-serde build. See [`examples/config.toml`](examples/config.toml) for the full
 field reference.
 
+Values are range-checked on load: weights and thresholds must be in `0.0..=1.0`
+(an oversized weight like `weight_homoglyph = 5.0` would be silently flattened by
+the 1.0 score cap, losing the relative weighting between passes), percentages at
+most 100. `from_toml` / `try_from_file` reject violations; when building `Config`
+as a struct literal, call `config.validate()` yourself.
+
+For domains whose vocabulary trips `EntropyBigram` false positives (genomics,
+legal acronyms, …), declare the domain's letter pairs:
+
+```toml
+# merged with the built-in ~130-entry English bigram table (case-insensitive)
+extra_english_bigrams = ["gt", "cg", "aa"]
+```
+
 ---
 
 ## Result API
@@ -307,6 +321,15 @@ multi-hop reasoning) — these require LLM-level reasoning, not structural norma
 Zero false positives on benign text (NIST references, code snippets, CLI flags,
 version numbers).
 
+### Scope and limitations
+
+This library detects **structural/encoding evasion**: text transformed so a keyword
+filter or classifier doesn't see what the model will see. It does not — by design —
+detect **semantic attacks** (jailbreak framing, roleplay personas, hypothetical
+scenarios, multi-hop reasoning) where the text is plain but the *intent* is adversarial.
+Those require LLM-level reasoning. Deploy this as a pre-filter in front of a
+semantic-aware defense, not as the sole line of defense.
+
 ---
 
 ## Three-tier confusable defense
@@ -320,7 +343,10 @@ This library applies three layers:
 
 1. **Static HOMOGLYPHS table** (1,631 entries) — Cyrillic, Greek, Hebrew, Arabic-Indic,
    and all mathematical style variants (bold, Fraktur, script, sans-serif, monospace).
-   Zero-allocation table lookup, runs before any LLM call.
+   Zero-allocation table lookup, runs before any LLM call. Audited against UTS #39
+   `confusables.txt` **Version 17.0.0** — covers all 1,421 in-scope upstream
+   single-char → ASCII mappings plus 245 curated extras; re-audit against future
+   Unicode releases with [`scripts/check_homoglyphs.py`](scripts/check_homoglyphs.py).
 
 2. **Script-intrusion interference** — forward/reverse interference scoring detects
    characters from a non-Latin script embedded inside a Latin word, even when the

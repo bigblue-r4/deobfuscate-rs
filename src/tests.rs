@@ -989,6 +989,99 @@ fn config_from_toml_rejects_unknown_field() {
     assert!(Config::from_toml("weight_homogliph = 0.9").is_err());
 }
 
+#[test]
+fn config_validate_default_is_valid() {
+    assert!(Config::default().validate().is_ok());
+}
+
+#[test]
+fn config_validate_rejects_out_of_range_values() {
+    let c = Config {
+        weight_homoglyph: 5.0,
+        flag_threshold: -0.1,
+        leet_min_pct: 250,
+        cjk_super_window: 0,
+        extra_english_bigrams: vec!["abc".into(), "a1".into(), "ok".into()],
+        ..Config::default()
+    };
+    let msg = c.validate().unwrap_err();
+    assert!(msg.contains("weight_homoglyph"), "got: {msg}");
+    assert!(msg.contains("flag_threshold"), "got: {msg}");
+    assert!(msg.contains("leet_min_pct"), "got: {msg}");
+    assert!(msg.contains("cjk_super_window"), "got: {msg}");
+    assert!(msg.contains("\"abc\""), "got: {msg}");
+    assert!(msg.contains("\"a1\""), "got: {msg}");
+    assert!(
+        !msg.contains("\"ok\""),
+        "valid bigram must not be listed: {msg}"
+    );
+}
+
+#[test]
+fn config_validate_rejects_nan() {
+    let c = Config {
+        block_threshold: f32::NAN,
+        entropy_high: f32::INFINITY,
+        ..Config::default()
+    };
+    let msg = c.validate().unwrap_err();
+    assert!(msg.contains("block_threshold"), "got: {msg}");
+    assert!(msg.contains("entropy_high"), "got: {msg}");
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn config_from_toml_rejects_out_of_range_weight() {
+    // In-range values parse; the same field out of range is an error, not
+    // silently flattened by the 1.0 score cap.
+    assert!(Config::from_toml("weight_homoglyph = 1.0").is_ok());
+    let e = Config::from_toml("weight_homoglyph = 5.0").unwrap_err();
+    assert!(e.to_string().contains("weight_homoglyph"), "got: {e}");
+}
+
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[test]
+fn config_try_from_file_out_of_range_returns_invalid_error() {
+    let path = std::env::temp_dir().join("deobfuscate_test_range_config.toml");
+    std::fs::write(&path, "weight_homoglyph = 5.0").unwrap();
+    let e = Config::try_from_file(&path).unwrap_err();
+    std::fs::remove_file(&path).ok();
+    assert!(matches!(e, crate::ConfigError::Invalid(_)), "got {e:?}");
+}
+
+#[test]
+fn extra_english_bigrams_suppress_domain_false_positive() {
+    // Nonsense-bigram token: zero coverage against the built-in table.
+    let input = "ZQXJKVZQXJKV";
+    let r = analyze(input);
+    assert!(
+        r.detections
+            .iter()
+            .any(|d| d.kind == PassKind::EntropyBigram),
+        "sanity: token must fire EntropyBigram with default config"
+    );
+
+    // Declaring the domain's bigrams (case-insensitive) suppresses the FP.
+    let config = Config {
+        extra_english_bigrams: vec![
+            "zq".into(),
+            "QX".into(),
+            "xj".into(),
+            "jk".into(),
+            "kv".into(),
+            "vz".into(),
+        ],
+        ..Config::default()
+    };
+    let r = Normalizer::default().with_config(config).analyze(input);
+    assert!(
+        !r.detections
+            .iter()
+            .any(|d| d.kind == PassKind::EntropyBigram),
+        "EntropyBigram must not fire once domain bigrams are declared"
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Confidence tests
 // ─────────────────────────────────────────────────────────────────────────

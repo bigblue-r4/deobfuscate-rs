@@ -4,6 +4,19 @@ All notable changes to `deobfuscate` are documented here.
 
 ---
 
+## [1.17.0] — 2026-07-02
+
+### Added
+- `Config::validate()` — range-checks every field: weights/thresholds in `0.0..=1.0` (an oversized weight was silently flattened by the 1.0 score cap, losing relative pass weighting), percentages ≤ 100, `entropy_high` finite and non-negative, `cjk_super_window` ≥ 1. Enforced automatically by `from_toml` and `try_from_file` (`ConfigError::Invalid` variant); call directly for struct-literal configs
+- `Config::extra_english_bigrams` — domain letter pairs (case-insensitive, two ASCII letters each) merged with the built-in ~130-entry table in the `EntropyBigram` coverage check, for vocabularies (genomics, legal acronyms) that trip low-coverage false positives
+- `scripts/check_homoglyphs.py` — audits the static `HOMOGLYPHS` table against upstream UTS #39 `confusables.txt` (downloads latest or reads a local copy); reports missing/extra mappings and emits missing entries as Rust code with `--emit`
+- README "Scope and limitations" section — explicit statement that semantic attacks (jailbreak framing, roleplay, multi-hop reasoning) are out of scope by design; deploy as a pre-filter, not sole defense
+
+### Changed
+- `HOMOGLYPHS` table doc header now carries a UTS #39 version marker: audited against confusables.txt **Version 17.0.0** (2025-07-22) — covers all 1,421 in-scope upstream single-char → ASCII mappings plus 245 curated extras
+
+---
+
 ## [1.16.0] — 2026-07-01
 
 ### Added

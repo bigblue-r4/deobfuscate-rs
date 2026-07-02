@@ -290,6 +290,15 @@ pub struct Config {
     /// Weight for SkeletonMatch detections. Default 0.75.
     #[cfg_attr(feature = "serde", serde(default = "serde_weight_skeleton_match"))]
     pub weight_skeleton_match: f32,
+
+    // ── EntropyBigram vocabulary override ────────────────────────────────────
+    /// Additional English bigrams merged with the built-in ~130-entry frequency
+    /// table for the EntropyBigram coverage check. Each entry must be exactly two
+    /// ASCII letters (case-insensitive). Use for domain vocabularies (genomics,
+    /// legal acronyms, …) whose tokens trip low-coverage false positives.
+    /// Default empty.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub extra_english_bigrams: Vec<String>,
 }
 
 impl Default for Config {
@@ -327,6 +336,7 @@ impl Default for Config {
             weight_rot13: DEFAULT_WEIGHT_ROT13,
             weight_punycode: DEFAULT_WEIGHT_PUNYCODE,
             weight_skeleton_match: DEFAULT_WEIGHT_SKELETON_MATCH,
+            extra_english_bigrams: Vec::new(),
         }
     }
 }
@@ -340,6 +350,9 @@ pub enum ConfigError {
     /// The file was read but is not valid TOML for [`Config`]
     /// (syntax error, wrong field type, unknown field).
     Parse(toml::de::Error),
+    /// The file parsed but a value is out of its documented range
+    /// (see [`Config::validate`]).
+    Invalid(String),
 }
 
 #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
@@ -348,6 +361,7 @@ impl std::fmt::Display for ConfigError {
         match self {
             Self::Io(e) => write!(f, "failed to read config file: {e}"),
             Self::Parse(e) => write!(f, "failed to parse config file: {e}"),
+            Self::Invalid(msg) => write!(f, "invalid config value: {msg}"),
         }
     }
 }
@@ -358,6 +372,7 @@ impl std::error::Error for ConfigError {
         match self {
             Self::Io(e) => Some(e),
             Self::Parse(e) => Some(e),
+            Self::Invalid(_) => None,
         }
     }
 }
@@ -377,22 +392,110 @@ impl From<toml::de::Error> for ConfigError {
 }
 
 impl Config {
+    /// Check that every value is inside its documented range.
+    ///
+    /// Rules enforced:
+    /// - all `weight_*`, `flag_threshold`, `block_threshold`, `cjk_super_threshold`,
+    ///   `cjk_super_min_cjk_frac`, `entropy_min_english` must be in `0.0..=1.0`
+    ///   (out-of-range weights are silently flattened by the 1.0 score cap, losing
+    ///   the relative weighting between passes)
+    /// - `entropy_high` must be finite and non-negative
+    /// - `morse_min_morse_pct` and `leet_min_pct` are percentages: at most 100
+    /// - `cjk_super_window` must be at least 1
+    /// - each `extra_english_bigrams` entry must be exactly two ASCII letters
+    ///
+    /// [`Config::from_toml`] and [`Config::try_from_file`] enforce this
+    /// automatically; call it directly when building `Config` as a struct literal.
+    /// The error message lists every violation, `; `-separated.
+    pub fn validate(&self) -> Result<(), String> {
+        let unit_ranged = [
+            ("flag_threshold", self.flag_threshold),
+            ("block_threshold", self.block_threshold),
+            ("cjk_super_threshold", self.cjk_super_threshold),
+            ("cjk_super_min_cjk_frac", self.cjk_super_min_cjk_frac),
+            ("entropy_min_english", self.entropy_min_english),
+            ("weight_bidi", self.weight_bidi),
+            ("weight_base64", self.weight_base64),
+            ("weight_backslash", self.weight_backslash),
+            ("weight_morse", self.weight_morse),
+            ("weight_url", self.weight_url),
+            ("weight_html", self.weight_html),
+            ("weight_invisible", self.weight_invisible),
+            ("weight_fullwidth", self.weight_fullwidth),
+            ("weight_homoglyph", self.weight_homoglyph),
+            ("weight_entropy", self.weight_entropy),
+            ("weight_script", self.weight_script),
+            ("weight_nfc", self.weight_nfc),
+            ("weight_leet", self.weight_leet),
+            ("weight_split_string", self.weight_split_string),
+            ("weight_unicode_escape", self.weight_unicode_escape),
+            ("weight_rot13", self.weight_rot13),
+            ("weight_punycode", self.weight_punycode),
+            ("weight_skeleton_match", self.weight_skeleton_match),
+        ];
+        let mut problems: Vec<String> = Vec::new();
+        for (name, v) in unit_ranged {
+            if !(0.0..=1.0).contains(&v) {
+                problems.push(format!("{name} must be in 0.0..=1.0, got {v}"));
+            }
+        }
+        if !self.entropy_high.is_finite() || self.entropy_high < 0.0 {
+            problems.push(format!(
+                "entropy_high must be finite and >= 0.0, got {}",
+                self.entropy_high
+            ));
+        }
+        if self.morse_min_morse_pct > 100 {
+            problems.push(format!(
+                "morse_min_morse_pct is a percentage, must be <= 100, got {}",
+                self.morse_min_morse_pct
+            ));
+        }
+        if self.leet_min_pct > 100 {
+            problems.push(format!(
+                "leet_min_pct is a percentage, must be <= 100, got {}",
+                self.leet_min_pct
+            ));
+        }
+        if self.cjk_super_window == 0 {
+            problems.push("cjk_super_window must be >= 1, got 0".to_string());
+        }
+        for bg in &self.extra_english_bigrams {
+            if bg.len() != 2 || !bg.bytes().all(|b| b.is_ascii_alphabetic()) {
+                problems.push(format!(
+                    "extra_english_bigrams entries must be exactly two ASCII letters, got {bg:?}"
+                ));
+            }
+        }
+        if problems.is_empty() {
+            Ok(())
+        } else {
+            Err(problems.join("; "))
+        }
+    }
+
     /// Load from a TOML string. Missing fields fall back to documented defaults.
+    /// Values outside their documented range (see [`Config::validate`]) are an error.
     #[cfg(feature = "serde")]
     pub fn from_toml(s: &str) -> Result<Self, toml::de::Error> {
-        toml::from_str(s)
+        let cfg: Self = toml::from_str(s)?;
+        cfg.validate().map_err(serde::de::Error::custom)?;
+        Ok(cfg)
     }
 
     /// Load from a file path, surfacing read and parse errors.
     ///
     /// Missing fields in the TOML fall back to documented defaults, but an
-    /// unreadable file or invalid TOML (syntax error, wrong field type) is
-    /// reported as [`ConfigError`] rather than silently replaced with defaults.
+    /// unreadable file, invalid TOML (syntax error, wrong field type, unknown
+    /// field), or an out-of-range value (see [`Config::validate`]) is reported
+    /// as [`ConfigError`] rather than silently replaced with defaults.
     /// Not available on wasm32 targets (no filesystem).
     #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
     pub fn try_from_file(path: &std::path::Path) -> Result<Self, ConfigError> {
         let s = std::fs::read_to_string(path)?;
-        Ok(toml::from_str(&s)?)
+        let cfg: Self = toml::from_str(&s)?;
+        cfg.validate().map_err(ConfigError::Invalid)?;
+        Ok(cfg)
     }
 
     /// Load from a file path. Returns [`Config::default`] if the file is missing or unparseable.

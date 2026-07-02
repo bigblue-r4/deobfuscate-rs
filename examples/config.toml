@@ -2,6 +2,7 @@
 # All fields are optional. Missing fields fall back to documented defaults.
 # Load with: Config::try_from_file(Path::new("config.toml"))?
 # Unknown fields and invalid values are rejected as parse errors.
+# Ranges are validated: weights/thresholds in 0.0..=1.0, percentages <= 100.
 
 # ── Decision thresholds ──────────────────────────────────────────────────────
 flag_threshold  = 0.25   # score >= this → should_flag() (default 0.25)
@@ -19,6 +20,12 @@ weight_homoglyph = 0.70
 # Relax leet for gaming contexts where 1337 is normal
 weight_leet = 0.10
 leet_min_pct = 60
+
+# ── EntropyBigram vocabulary override ────────────────────────────────────────
+# Domain letter pairs (exactly two ASCII letters each, case-insensitive) merged
+# with the built-in ~130-entry English bigram table. Use when domain vocabulary
+# (genomics, legal acronyms, ...) trips low-coverage false positives.
+# extra_english_bigrams = ["gt", "cg", "aa"]
 
 # ── Other tunable thresholds ─────────────────────────────────────────────────
 # entropy_high        = 5.2    # Shannon entropy (bits) above which a token is suspicious

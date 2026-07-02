@@ -47,8 +47,16 @@ pub(crate) const BIDI_CONTROLS: &[char] = &[
 ];
 
 /// Confusable map: non-ASCII look-alike → canonical ASCII.
-/// Source: Unicode TR39 confusables.txt (full ASCII-target subset); Arabic-Indic by
-/// numeric value; enclosed alphanumerics manual. Fullwidth Latin (U+FF01–FF5E) excluded.
+/// Source: Unicode UTS #39 confusables.txt (full ASCII-target subset); Arabic-Indic by
+/// numeric value; enclosed alphanumerics manual. Fullwidth Latin (U+FF01–FF5E) excluded
+/// (handled by the FullwidthChars pass).
+///
+/// **Audited against confusables.txt Version 17.0.0 (2025-07-22)** — covers all 1,421
+/// in-scope upstream single-char → ASCII mappings plus 245 curated extras. When Unicode
+/// publishes a new confusables.txt, re-audit with `scripts/check_homoglyphs.py` (downloads
+/// the latest upstream file, diffs it against this table, and can emit missing entries as
+/// Rust code with `--emit`). The SkeletonMatch pass (via the `unicode-security` crate) is
+/// the algorithmic TR39 fallback for confusables this static hot-path table misses.
 pub(crate) const HOMOGLYPHS: &[(char, char)] = &[
     // ── Cyrillic (45 entries) ─────────────────────────────────────────────────
     ('\u{0405}', 'S'), // Ѕ

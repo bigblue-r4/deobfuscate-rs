@@ -157,6 +157,7 @@ NormalizationResult {
 Config::default()                       // all defaults
 Config::from_toml(s: &str)              // partial TOML string (serde feature)
 Config::try_from_file(path: &Path)      // file, Result<Config, ConfigError> (non-wasm32, serde feature)
+Config::validate()                      // range-check all fields, Result<(), String>
 ```
 
 ### Feature flags

@@ -978,12 +978,17 @@ pub(crate) fn pass_entropy_bigram(
         let alpha_count = chars.iter().filter(|c| c.is_alphabetic()).count();
         let bigram_score = if alpha_count >= ENTROPY_MIN_ALPHA {
             let pairs = n - 1;
+            let matches_bigram = |b: &str, i: usize| {
+                let mut bc = b.chars().map(|c| c.to_ascii_uppercase());
+                bc.next() == Some(upper[i]) && bc.next() == Some(upper[i + 1])
+            };
             let hits = (0..pairs)
                 .filter(|&i| {
-                    ENGLISH_BIGRAMS.iter().any(|&b| {
-                        let mut bc = b.chars();
-                        bc.next() == Some(upper[i]) && bc.next() == Some(upper[i + 1])
-                    })
+                    ENGLISH_BIGRAMS.iter().any(|&b| matches_bigram(b, i))
+                        || config
+                            .extra_english_bigrams
+                            .iter()
+                            .any(|b| matches_bigram(b, i))
                 })
                 .count();
             hits as f32 / pairs as f32
