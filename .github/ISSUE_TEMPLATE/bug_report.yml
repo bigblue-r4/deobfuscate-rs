@@ -1,0 +1,49 @@
+name: Bug report
+description: Incorrect detection, false positive, panic, or API misbehavior
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`deobfuscate = ?` in Cargo.toml (or pip `deobfuscate.__version__`)"
+      placeholder: "1.18.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options: [Rust crate, Python package, WASM/npm, CLI/other]
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Non-default configuration
+      description: TOML overrides / disabled passes / feature flags, if any
+      render: toml
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: >
+        Exact input string (escape invisible characters as \u{XXXX} so they
+        survive GitHub) and the smallest code that shows the problem.
+      render: rust
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+      description: What should have happened (score/detections) vs what did
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: >
+        ⚠️ If this is a **detection bypass** (an encoding within a pass's
+        documented coverage that evades it), please report it privately via
+        [security advisories](../../security/advisories/new) instead — see
+        SECURITY.md.

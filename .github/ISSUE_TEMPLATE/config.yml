@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability (private)
+    url: https://github.com/bigblue-r4/deobfuscate-rs/security/advisories/new
+    about: Detection bypasses and exploitable bugs — please do not open public issues

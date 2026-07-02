@@ -1,0 +1,20 @@
+name: Feature request
+description: API addition, configuration knob, or integration
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you're trying to do and what's missing or awkward today
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape
+      description: Sketch the API/config you'd want. Additive-only on 1.x — see CONTRIBUTING.md for the semver policy.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds considered

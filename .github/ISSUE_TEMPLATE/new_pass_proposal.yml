@@ -1,0 +1,39 @@
+name: New detection pass proposal
+description: Propose a new obfuscation/evasion class for the pipeline
+labels: [new-pass]
+body:
+  - type: textarea
+    id: attack
+    attributes:
+      label: Attack class
+      description: >
+        What encoding/evasion does this catch? Link to a real-world sighting
+        (CTF writeup, incident report, tracker issue) if one exists.
+    validations:
+      required: true
+  - type: textarea
+    id: samples
+    attributes:
+      label: Adversarial samples
+      description: 3+ example inputs the pass must catch (escape invisibles as \u{XXXX})
+    validations:
+      required: true
+  - type: textarea
+    id: benign
+    attributes:
+      label: False-positive risk
+      description: >
+        What benign text looks similar? (This decides the pass weight and
+        gates. The corpus gate enforces 0 FP — hard cases welcome.)
+    validations:
+      required: true
+  - type: dropdown
+    id: behavior
+    attributes:
+      label: Pass behavior
+      options:
+        - "Normalizing (rewrites text)"
+        - "Detection-only (flags, does not rewrite)"
+        - "HALT (clears text, blocks)"
+    validations:
+      required: true
