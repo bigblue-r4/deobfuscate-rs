@@ -3,7 +3,7 @@
 #[cfg(feature = "audit")]
 use crate::audit::build_audit_record;
 use crate::config::Config;
-use crate::passes::*;
+use crate::registry::{registry, PassCtx, PassOutcome};
 use crate::types::{Detection, NormalizationResult, PassKind};
 use alloc::collections::BTreeSet;
 #[cfg(feature = "audit")]
@@ -127,95 +127,49 @@ impl Normalizer {
             (format!("{:x}", h.finalize()), input.chars().count())
         };
 
-        if self.has(&PassKind::PreScanNfc) {
-            pass_nfc(&mut text, &mut detections);
-        }
-        if self.has(&PassKind::InvisibleStrip) {
-            pass_invisible(&mut text, &mut detections);
-        }
-
-        if self.has(&PassKind::CjkSuperposition)
-            && pass_cjk_superposition(&mut text, &mut detections, cfg)
-        {
-            #[cfg(feature = "audit")]
-            let audit = build_audit_record(
-                input_hash,
-                input_len,
-                1.0,
-                true,
-                cfg.block_threshold,
-                &detections,
-                cfg.audit_redaction,
-            );
-            return NormalizationResult {
-                normalized: String::new(),
-                detections,
-                obfuscation_score: 1.0,
-                flag_threshold: cfg.flag_threshold,
-                block_threshold: cfg.block_threshold,
-                #[cfg(feature = "audit")]
-                audit,
-            };
-        }
-
-        if self.has(&PassKind::BiDiControl) {
-            pass_bidi(&mut text, &mut detections);
-        }
-        if self.has(&PassKind::FullwidthChars) {
-            pass_fullwidth(&mut text, &mut detections);
-        }
-        if self.has(&PassKind::BackslashEscape) {
-            pass_backslash_unescape(&mut text, &mut detections);
-        }
-        if self.has(&PassKind::UnicodeEscape) {
-            pass_unicode_escape(&mut text, &mut detections);
-        }
-        if self.has(&PassKind::Punycode) {
-            pass_punycode(&mut text, &mut detections);
-        }
-        if self.has(&PassKind::Rot13) {
-            pass_rot13(&mut text, &mut detections);
-        }
-        if self.has(&PassKind::UrlEncoding) {
-            pass_url_decode(&mut text, &mut detections, cfg);
-        }
-        if self.has(&PassKind::HtmlEntities) {
-            pass_html_entities(&mut text, &mut detections, cfg);
-        }
-        if self.has(&PassKind::Base64) {
-            pass_base64(&mut text, &mut detections, cfg);
-        }
-        if self.has(&PassKind::MorseCode) {
-            pass_morse(&mut text, &mut detections, cfg);
-        }
-
-        let script_score = if self.has(&PassKind::Homoglyph) || self.has(&PassKind::ScriptIntrusion)
-        {
-            pass_homoglyphs(
-                &mut text,
-                &mut detections,
-                self.has(&PassKind::ScriptIntrusion),
-            )
-        } else {
-            0.0
+        // Drive the ordered pass registry. Passes may mutate `text` in place so
+        // downstream passes see decoded output. Two passes (Homoglyph, Leet)
+        // surface an intensity score blended into the aggregate; CjkSuperposition
+        // can halt the pipeline outright.
+        let ctx = PassCtx {
+            config: cfg,
+            script_intrusion_enabled: self.has(&PassKind::ScriptIntrusion),
         };
+        let mut script_score = 0.0_f32;
+        let mut leet_score = 0.0_f32;
 
-        let leet_score = if self.has(&PassKind::Leetspeak) {
-            pass_leet(&mut text, &mut detections, cfg)
-        } else {
-            0.0
-        };
-
-        if self.has(&PassKind::EntropyBigram) {
-            pass_entropy_bigram(&mut text, &mut detections, cfg);
-        }
-        if self.has(&PassKind::SplitString) {
-            pass_split_string(&mut text, &mut detections);
-        }
-        // SkeletonMatch requires the std-only unicode_skeleton crate.
-        #[cfg(feature = "std")]
-        if self.has(&PassKind::SkeletonMatch) {
-            pass_skeleton_match(&mut text, &mut detections);
+        for pass in registry() {
+            if !pass.enabled(&self.enabled) {
+                continue;
+            }
+            match pass.run(&mut text, &mut detections, &ctx) {
+                PassOutcome::Halt => {
+                    #[cfg(feature = "audit")]
+                    let audit = build_audit_record(
+                        input_hash,
+                        input_len,
+                        1.0,
+                        true,
+                        cfg.block_threshold,
+                        &detections,
+                        cfg.audit_redaction,
+                    );
+                    return NormalizationResult {
+                        normalized: String::new(),
+                        detections,
+                        obfuscation_score: 1.0,
+                        flag_threshold: cfg.flag_threshold,
+                        block_threshold: cfg.block_threshold,
+                        #[cfg(feature = "audit")]
+                        audit,
+                    };
+                }
+                PassOutcome::Continue { score } => match pass.kind() {
+                    PassKind::Homoglyph => script_score = score,
+                    PassKind::Leetspeak => leet_score = score,
+                    _ => {}
+                },
+            }
         }
 
         // Semantic scorer runs last, against fully normalized text, so encoding

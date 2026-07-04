@@ -63,6 +63,7 @@ mod config;
 mod math;
 mod normalizer;
 mod passes;
+mod registry;
 #[cfg(feature = "semantic")]
 mod semantic;
 mod tables;
