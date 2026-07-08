@@ -79,6 +79,7 @@ impl AuditRecord {
     /// before serialization). If `prev_hmac` is set, it is included in the signed content,
     /// creating a tamper-evident chain: altering `prev_hmac` after signing will fail `verify`.
     pub fn sign(&mut self, key: &[u8]) {
+        use hmac::digest::KeyInit; // new_from_slice moved to KeyInit in hmac 0.13
         use hmac::{Hmac, Mac};
         use sha2::Sha256;
         let bytes = self.canonical_bytes();
@@ -93,6 +94,7 @@ impl AuditRecord {
     /// Returns `false` if the record is unsigned, if the hex is malformed, or if the
     /// signature does not match. Uses constant-time comparison to prevent timing attacks.
     pub fn verify(&self, key: &[u8]) -> bool {
+        use hmac::digest::KeyInit; // new_from_slice moved to KeyInit in hmac 0.13
         use hmac::{Hmac, Mac};
         use sha2::Sha256;
         let Some(ref sig) = self.signature else {
@@ -222,7 +224,9 @@ pub(crate) fn build_audit_record(
                     use sha2::{Digest, Sha256};
                     let mut h = Sha256::new();
                     h.update(d.detail.as_bytes());
-                    format!("sha256:{:x}", h.finalize())
+                    // digest 0.11: finalize() -> Array (no LowerHex); hex-encode bytes
+                    let hex: String = h.finalize().iter().map(|b| format!("{:02x}", b)).collect();
+                    format!("sha256:{}", hex)
                 }
                 crate::AuditRedaction::Elide => "[redacted]".to_string(),
             },
