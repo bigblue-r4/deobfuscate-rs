@@ -1,6 +1,6 @@
 [package]
 name        = "deobfuscate-py"
-version     = "1.18.0"
+version     = "1.18.1"
 edition     = "2021"
 description = "Python bindings for the deobfuscate crate — multi-pass prompt-injection and encoding-evasion detector."
 license     = "MIT"
@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 deobfuscate = { path = "..", features = ["serde", "audit"] }
-pyo3        = { version = "0.25", features = ["abi3-py39"] }
+pyo3        = { version = "0.29", features = ["abi3-py39"] }
 
 [features]
 default = []

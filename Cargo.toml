@@ -4,7 +4,7 @@ exclude = ["fuzz"]
 
 [package]
 name        = "deobfuscate"
-version     = "1.18.0"
+version     = "1.18.1"
 edition     = "2021"
 description = "Multi-pass text deobfuscation and encoding-evasion detector for LLM security pipelines."
 license     = "MIT"
@@ -21,7 +21,7 @@ default = ["std", "serde", "audit"]
 # std: filesystem config loading, timestamps, and the SkeletonMatch pass
 # (unicode_skeleton is std-only). Disable for no_std + alloc targets — see
 # the "no_std / minimal profile" section of the README.
-std     = ["dep:unicode_skeleton", "base64/std", "unicode-normalization/std", "serde?/std", "sha2?/std", "serde_json?/std"]
+std     = ["dep:unicode_skeleton", "base64/std", "unicode-normalization/std", "serde?/std", "serde_json?/std"]
 serde   = ["std", "dep:serde", "dep:toml"]
 audit   = ["serde", "dep:sha2", "dep:serde_json", "dep:hmac"]
 wasm    = ["std", "dep:wasm-bindgen", "dep:js-sys"]
@@ -40,8 +40,8 @@ unicode_skeleton      = { version = "0.1", optional = true }
 libm         = "0.2"
 serde        = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
 toml         = { version = "0.8", optional = true }
-sha2         = { version = "0.10", default-features = false, optional = true }
-hmac         = { version = "0.12", optional = true }
+sha2         = { version = "0.11", default-features = false, optional = true }
+hmac         = { version = "0.13", optional = true }
 serde_json   = { version = "1", default-features = false, features = ["alloc"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys       = { version = "0.3", optional = true }

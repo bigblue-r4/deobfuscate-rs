@@ -4,6 +4,14 @@ All notable changes to `deobfuscate` are documented here.
 
 ---
 
+## [1.18.1] — 2026-07-07
+
+### Changed
+- **Dependency refresh (no public API change).** Coordinated crypto-stack upgrade to the `digest` 0.11 ecosystem: `hmac` 0.12 → 0.13 and `sha2` 0.10 → 0.11 (they must move together). `new_from_slice` now comes from the `KeyInit` trait and `finalize()` returns `Array` (no `LowerHex`), so digests are hex-encoded explicitly. HMAC-SHA256 output is byte-identical — existing audit signatures remain valid. Removed the now-nonexistent `sha2/std` feature mapping (Sha256 hashing needs no std). Supersedes Dependabot #9.
+- **Python bindings: `pyo3` 0.25 → 0.29.** `Python::allow_threads` → `detach` (0.29 attach/detach GIL rename); `Detection` opts out of the now-optional `FromPyObject` derive via `skip_from_py_object` (it is only ever returned to Python). Supersedes Dependabot #7.
+
+---
+
 ## [1.18.0] — 2026-07-01
 
 ### Added

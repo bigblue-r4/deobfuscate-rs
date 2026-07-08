@@ -124,7 +124,9 @@ impl Normalizer {
             use sha2::{Digest, Sha256};
             let mut h = Sha256::new();
             h.update(input.as_bytes());
-            (format!("{:x}", h.finalize()), input.chars().count())
+            // digest 0.11: finalize() -> Array (no LowerHex); hex-encode bytes
+            let hex: String = h.finalize().iter().map(|b| format!("{:02x}", b)).collect();
+            (hex, input.chars().count())
         };
 
         if self.has(&PassKind::PreScanNfc) {

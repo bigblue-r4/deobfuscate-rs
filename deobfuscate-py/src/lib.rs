@@ -11,7 +11,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 /// One obfuscation event found in the input.
-#[pyclass(frozen, name = "Detection", module = "deobfuscate")]
+// skip_from_py_object: Detection is only returned to Python, never accepted as an
+// argument, so it needs no FromPyObject derive (opt-out required since pyo3 0.29).
+#[pyclass(frozen, name = "Detection", module = "deobfuscate", skip_from_py_object)]
 #[derive(Clone)]
 struct PyDetection {
     /// Pass display name, e.g. "base64", "homoglyph".
@@ -193,7 +195,7 @@ impl PyScanner {
 
     /// Scan many strings, releasing the GIL while scanning.
     fn scan_batch(&self, py: Python<'_>, texts: Vec<String>) -> Vec<PyReport> {
-        py.allow_threads(|| {
+        py.detach(|| {
             texts
                 .iter()
                 .map(|t| to_report(self.normalizer.analyze(t)))
@@ -211,7 +213,7 @@ fn scan(text: &str) -> PyReport {
 /// Scan many strings with the default configuration, releasing the GIL.
 #[pyfunction]
 fn scan_batch(py: Python<'_>, texts: Vec<String>) -> Vec<PyReport> {
-    py.allow_threads(|| {
+    py.detach(|| {
         let normalizer = Normalizer::default();
         texts
             .iter()
