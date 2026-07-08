@@ -47,7 +47,7 @@ jobs:
           print('wheel OK:', d.__version__)
           "
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}
           path: deobfuscate-py/dist/*.whl
@@ -65,7 +65,7 @@ jobs:
           command: sdist
           args: --out dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: deobfuscate-py/dist/*.tar.gz
