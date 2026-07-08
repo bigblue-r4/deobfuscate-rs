@@ -48,7 +48,7 @@ jobs:
         # "deobfuscate" is taken.
         run: wasm-pack build --target web --out-dir pkg --scope bigblue-r4 -- --features wasm --no-default-features
       - name: Upload WASM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-pkg
           path: pkg/
@@ -61,7 +61,7 @@ jobs:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - name: Download WASM artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: wasm-pkg
           path: pkg/
@@ -85,7 +85,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Download WASM artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: wasm-pkg
           path: pkg/
@@ -99,7 +99,7 @@ jobs:
           echo "$NOTES" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body: ${{ steps.changelog.outputs.notes }}
           files: |
