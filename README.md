@@ -9,12 +9,32 @@ text for the model and a structured detection report for your audit trail.
 [![CI](https://github.com/bigblue-r4/deobfuscate-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/bigblue-r4/deobfuscate-rs/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![crates.io](https://img.shields.io/crates/v/deobfuscate.svg)](https://crates.io/crates/deobfuscate)
+[![docs.rs](https://img.shields.io/docsrs/deobfuscate)](https://docs.rs/deobfuscate)
 
 **Fast enough to run on every request**: ~2,000 prompts/sec single-threaded
 at 1 KiB (≈0.5 ms added latency) on a 2014 desktop CPU, scaling with cores —
 methodology and full numbers in [BENCHMARKS.md](BENCHMARKS.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for full version history.
+
+## Contents
+
+- [Quick start](#quick-start)
+- [Passes](#passes)
+- [Scoring](#scoring)
+- [Measured detection rates](#measured-detection-rates)
+- [Builder API](#builder-api)
+- [Configuration](#configuration)
+- [Result API](#result-api)
+- [Semantic scoring hook](#semantic-scoring-hook-feature--semantic)
+- [Audit trail](#audit-trail)
+- [Python](#python)
+- [no_std / minimal profile](#no_std--minimal-profile)
+- [WebAssembly](#webassembly)
+- [Benchmark](#benchmark-cyberec-adversarial-dataset-141-rows)
+- [Three-tier confusable defense](#three-tier-confusable-defense)
+- [Origin](#origin)
+- [License](#license)
 
 ---
 
