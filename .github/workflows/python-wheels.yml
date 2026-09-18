@@ -2,7 +2,10 @@ name: Python wheels
 
 # Builds abi3 wheels for the deobfuscate-py binding on every release tag (and
 # on demand). Publishing to PyPI runs only when the PYPI_API_TOKEN secret is
-# configured, mirroring how release.yml gates npm publishing on NPM_TOKEN.
+# configured; without it the wheels still build and the job warns instead of
+# failing. Keep it that way — release.yml's npm job failed hard on a missing
+# target instead, and that turned four consecutive releases red before anyone
+# noticed (dropped in #23).
 on:
   push:
     tags: ["v*"]
