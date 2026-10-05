@@ -6,6 +6,8 @@ Built for LLM security pipelines where attackers encode prompt-injection payload
 to evade content classifiers. Run this **before** any LLM call: it returns cleaned
 text for the model and a structured detection report for your audit trail.
 
+**[Try it in your browser →](https://bigblue-r4.github.io/sgail-playground/#tags)** Paste any text and see the hidden characters, look-alike letters and encoded instructions, step by step. It runs locally; nothing is uploaded.
+
 [![CI](https://github.com/bigblue-r4/deobfuscate-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/bigblue-r4/deobfuscate-rs/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![crates.io](https://img.shields.io/crates/v/deobfuscate.svg)](https://crates.io/crates/deobfuscate)
