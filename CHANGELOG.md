@@ -4,6 +4,13 @@ All notable changes to `deobfuscate` are documented here.
 
 ---
 
+## [Unreleased]
+
+### CI
+- Add SHA-pinned OpenSSF Scorecard publishing and SARIF upload, cargo-deny dependency checks, and the Scorecard badge.
+
+---
+
 ## [1.18.1] — 2026-07-07
 
 ### Changed
