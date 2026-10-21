@@ -7,6 +7,7 @@ All notable changes to `deobfuscate` are documented here.
 ## [Unreleased]
 
 ### CI
+- Restrict workflow token permissions, pin remaining actions to commit SHAs with explicit Rust toolchains, and add Rust CodeQL scanning.
 - Add SHA-pinned OpenSSF Scorecard publishing and SARIF upload, cargo-deny dependency checks, and the Scorecard badge.
 
 ### Security
