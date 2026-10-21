@@ -4,6 +4,16 @@ All notable changes to `deobfuscate` are documented here.
 
 ---
 
+## [Unreleased]
+
+### CI
+- Add SHA-pinned OpenSSF Scorecard publishing and SARIF upload, cargo-deny dependency checks, and the Scorecard badge.
+
+### Security
+- Bump dev-dependency `crossbeam-epoch` 0.9.18 → 0.9.21 (RUSTSEC-2026-0204), found by the new cargo-deny check. Reached only through `criterion` (benchmarks); not part of the published crate's dependency tree.
+
+---
+
 ## [1.18.1] — 2026-07-07
 
 ### Changed
