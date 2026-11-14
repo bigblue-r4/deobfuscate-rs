@@ -100,6 +100,9 @@ impl AuditRecord {
         let Some(ref sig) = self.signature else {
             return false;
         };
+        if sig.len() != 64 {
+            return false;
+        }
         let Some(sig_bytes) = audit_decode_hex(sig) else {
             return false;
         };
@@ -124,7 +127,7 @@ impl AuditRecord {
 
 #[cfg(feature = "audit")]
 pub(crate) fn audit_decode_hex(s: &str) -> Option<Vec<u8>> {
-    if !s.len().is_multiple_of(2) {
+    if !s.len().is_multiple_of(2) || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     (0..s.len())
