@@ -1,6 +1,6 @@
 [package]
 name        = "deobfuscate-py"
-version     = "1.18.1"
+version     = "1.18.2"
 edition     = "2021"
 description = "Python bindings for the deobfuscate crate — multi-pass prompt-injection and encoding-evasion detector."
 license     = "MIT"

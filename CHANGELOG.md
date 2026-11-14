@@ -6,12 +6,25 @@ All notable changes to `deobfuscate` are documented here.
 
 ## [Unreleased]
 
+---
+
+## [1.18.2] — 2026-11-14
+
+### Security
+- **No panic on crafted URL-encoded input.** `UrlEncoding` cut its 60-character preview of the decoded text by byte index, so a decoded multibyte character (e.g. `€`) at the cut point panicked. The preview is now cut by characters. Affects 1.18.1 and earlier: a caller analyzing untrusted text could be crashed (denial of service; no data exposure). (#40)
+- **No panic on malformed audit signatures.** With the `audit` feature, `AuditRecord::verify` sliced the hex signature by byte index, so a non-ASCII signature panicked. Non-hex input is now rejected first and only 64-character signatures are accepted; `verify` returns `false` instead of panicking. (#40)
+- Bump `ctutils` 0.4.2 → 0.4.8 in `Cargo.lock` (RUSTSEC-2026-0385).
+- Bump dev-dependency `crossbeam-epoch` 0.9.18 → 0.9.21 (RUSTSEC-2026-0204), found by the new cargo-deny check. Reached only through `criterion` (benchmarks); not part of the published crate's dependency tree.
+
+### Fixed
+- **Disabled `Homoglyph` pass stays disabled.** Enabling only `ScriptIntrusion` also replaced and scored homoglyphs. Homoglyphs are now replaced and scored only when `PassKind::Homoglyph` is enabled; all four on/off combinations are covered by `tests/review_regressions.rs`. (#40)
+
+### Changed
+- Lockfile refresh of minor/patch dependencies (`toml` and others; #25, #39). No public API change.
+
 ### CI
 - Restrict workflow token permissions, pin remaining actions to commit SHAs with explicit Rust toolchains, and add Rust CodeQL scanning.
 - Add SHA-pinned OpenSSF Scorecard publishing and SARIF upload, cargo-deny dependency checks, and the Scorecard badge.
-
-### Security
-- Bump dev-dependency `crossbeam-epoch` 0.9.18 → 0.9.21 (RUSTSEC-2026-0204), found by the new cargo-deny check. Reached only through `criterion` (benchmarks); not part of the published crate's dependency tree.
 
 ---
 

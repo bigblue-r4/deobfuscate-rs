@@ -196,6 +196,7 @@ impl Normalizer {
             pass_homoglyphs(
                 &mut text,
                 &mut detections,
+                self.has(&PassKind::Homoglyph),
                 self.has(&PassKind::ScriptIntrusion),
             )
         } else {
