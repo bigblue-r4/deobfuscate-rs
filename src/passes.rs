@@ -333,7 +333,7 @@ pub(crate) fn pass_url_decode(text: &mut String, detections: &mut Vec<Detection>
                 if let Ok(decoded) = String::from_utf8(raw_bytes) {
                     if is_suspicious_decoded(&decoded) {
                         let orig_d = &raw_span[..raw_span.len().min(60)];
-                        let dec_d = &decoded[..decoded.len().min(60)];
+                        let dec_d: String = decoded.chars().take(60).collect();
                         detections.push(Detection {
                             kind: PassKind::UrlEncoding,
                             original: raw_span.to_string(),
@@ -660,6 +660,7 @@ pub(crate) fn pass_morse(text: &mut String, detections: &mut Vec<Detection>, con
 pub(crate) fn pass_homoglyphs(
     text: &mut String,
     detections: &mut Vec<Detection>,
+    detect_homoglyph: bool,
     detect_script_intrusion: bool,
 ) -> f32 {
     let table: BTreeMap<char, char> = HOMOGLYPHS.iter().copied().collect();
@@ -694,7 +695,7 @@ pub(crate) fn pass_homoglyphs(
         .iter()
         .enumerate()
         .map(|(i, &c)| {
-            if token_replaceable[i] {
+            if detect_homoglyph && token_replaceable[i] {
                 if let Some(&ascii) = table.get(&c) {
                     replacements.push((c, ascii, i));
                     return ascii;
@@ -757,7 +758,11 @@ pub(crate) fn pass_homoglyphs(
         });
     }
 
-    interference
+    if detect_homoglyph {
+        interference
+    } else {
+        0.0
+    }
 }
 
 pub(crate) fn has_script_intrusions(chars: &[char]) -> bool {
