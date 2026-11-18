@@ -1,0 +1,10 @@
+# Pinned by hash so CI installs exactly this maturin (pip --require-hashes).
+# Update: pick the version, copy both sha256 values from
+# https://pypi.org/project/maturin/<version>/#files
+maturin==1.16.0 \
+    --hash=sha256:837db2f4d93d4899c3ac393fb3cc9eebf35b6002336e5d574f4a4fb6c49fe283 \
+    --hash=sha256:13e69ca12542999d8c5467131de72a49bb76e4c284b9a45c5783df7c0fcb3a8a
+# maturin's only dependency, needed on Python < 3.11 (CI uses 3.12).
+tomli==2.5.0 ; python_version < "3.11" \
+    --hash=sha256:32a7b79ac57a2e83670ce329ccf675798bc5a2094783a63676866b70503f2e2b \
+    --hash=sha256:264507556cd8b8c8e7c6ee037cdf443a463f03f4c958e57195e3d369711b8ff6

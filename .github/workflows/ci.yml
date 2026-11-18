@@ -104,7 +104,7 @@ jobs:
 
       - name: Build and install wheel
         run: |
-          pip install maturin
+          pip install --require-hashes -r .github/requirements/maturin.txt
           maturin build --release --out dist -m deobfuscate-py/Cargo.toml
           pip install dist/*.whl
 

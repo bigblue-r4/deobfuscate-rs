@@ -1,0 +1,9 @@
+# CodeQL configuration for deobfuscate-rs.
+#
+# Test-only code is excluded: the tests use placeholder HMAC keys such as
+# b"test-key" and b"wrong-key" to exercise AuditRecord::sign/verify, which
+# rust/hard-coded-cryptographic-value reports as hard-coded secrets. They are
+# fixtures, not credentials. Library code and examples are still analysed.
+paths-ignore:
+  - tests
+  - src/tests.rs
