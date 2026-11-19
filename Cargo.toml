@@ -45,7 +45,7 @@ hmac         = { version = "0.13", optional = true }
 serde_json   = { version = "1", default-features = false, features = ["alloc"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys       = { version = "0.3", optional = true }
-opentelemetry = { version = "0.32", default-features = false, features = ["trace"], optional = true }
+opentelemetry = { version = "0.33", default-features = false, features = ["trace"], optional = true }
 
 # Documented 1.x semver policy (see BREAKING-CANDIDATES.md): PassKind gains
 # variants and Config gains fields in minor releases; downstream code uses a
