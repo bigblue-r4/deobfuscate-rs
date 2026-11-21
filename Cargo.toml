@@ -61,7 +61,7 @@ required-features = ["audit"]
 
 [dev-dependencies]
 serde_json = "1"
-getrandom = "0.3"
+getrandom = "0.4"
 criterion = { version = "0.8", features = ["html_reports"] }
 
 [[bench]]
